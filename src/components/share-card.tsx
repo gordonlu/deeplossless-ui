@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { toPng } from "html-to-image";
-import type { Session } from "@/lib/fake-data";
+import type { Session } from "@/lib/types";
 
 export function ShareCard({ session }: { session: Session }) {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -27,16 +27,16 @@ export function ShareCard({ session }: { session: Session }) {
       {/* Export button */}
       <button
         onClick={exportPng}
-        className="w-full py-2 font-mono text-xs tracking-widest uppercase rounded-sm border transition-colors hover:opacity-80"
-        style={{ color: "#FCEE0A", borderColor: "#FCEE0A30", backgroundColor: "#FCEE0A08" }}
+        className="w-full py-3 font-mono text-sm font-bold tracking-widest uppercase rounded-sm border transition-colors hover:opacity-80"
+        style={{ color: "#0A0A0A", borderColor: "#FCEE0A", backgroundColor: "#FCEE0A" }}
       >
-        Export Forensic Report
+        ⬇ EXPORT REPORT
       </button>
 
-      {/* Card preview (hidden, used for export) */}
+      {/* Card preview — rendered for PNG export, positioned off-screen */}
       <div
         ref={cardRef}
-        className="p-6 space-y-5"
+        className="p-6 space-y-5 absolute -left-[9999px] top-0"
         style={{ backgroundColor: "#0A0A0A", width: "600px", fontFamily: "'JetBrains Mono', monospace" }}
       >
         {/* Header */}

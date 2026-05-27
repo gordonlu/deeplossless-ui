@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import type { Evidence, Session } from "@/lib/fake-data";
+import type { Evidence, Session } from "@/lib/types";
 
 function SeverityBadge({ severity }: { severity: Evidence["severity"] }) {
   const colors: Record<string, string> = {
@@ -17,78 +17,56 @@ function SeverityBadge({ severity }: { severity: Evidence["severity"] }) {
   );
 }
 
-export function ClaimEvidence({ evidence, onSelectDiff }: { evidence: Evidence[]; onSelectDiff?: (line: number) => void }) {
+export function ClaimEvidence({ evidence, sessionId }: { evidence: Evidence[]; sessionId?: string }) {
+  const warnings = evidence.filter(e => e.severity === "warning");
+  const highConf = evidence.filter(e => e.confidence === "high");
+  const observed = evidence.filter(e => e.source === "observed");
+
   return (
     <div className="h-full flex flex-col" style={{ backgroundColor: "#0A0A0A" }}>
       {/* Header */}
-      <div className="px-4 py-3 flex items-center justify-between border-b" style={{ borderColor: "#1C1C1C" }}>
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-xs tracking-widest uppercase text-[#FCEE0A]">Verification Gap</span>
-          <span className="font-mono text-xs text-[#7A7A7A]">{evidence.length} gaps</span>
+      <div className="px-4 py-3 border-b" style={{ borderColor: "#1C1C1C" }}>
+        <div className="flex items-baseline gap-2">
+          <span className="font-mono text-sm tracking-widest uppercase text-[#FCEE0A]">Findings</span>
+          <span className="font-mono text-xs text-[#7A7A7A]">{evidence.length} total</span>
         </div>
-        <span className="font-mono text-xs text-[#7A7A7A]">ASSERTION ↔ OBSERVED EXECUTION</span>
+        <span className="font-mono text-[11px] text-[#3A3A3A] block mt-1">
+          {warnings.length} ⚠ · {highConf.length} high conf · {observed.length} observed
+        </span>
       </div>
 
-      {/* Evidence list */}
-      <div className="flex-1 overflow-y-auto">
-        {evidence.map((ev, idx) => (
-          <motion.div
-            key={ev.id}
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: idx * 0.1 }}
-            className="border-b p-4 space-y-3"
-            style={{ borderColor: "#141414" }}
-          >
-            {/* Severity + category */}
-            <div className="flex items-center gap-2">
-              <SeverityBadge severity={ev.severity} />
-              <span className="font-mono text-xs text-[#EAEAEA]">{ev.id}</span>
-            </div>
-
-            {/* Confrontation: Assertion vs Observation */}
-            <div className="grid grid-cols-[1fr_1fr] gap-3">
-              {/* Left: Assertion */}
-              <div className="p-3 rounded-sm" style={{ backgroundColor: "#101114", borderLeft: "2px solid #FCEE0A" }}>
-                <div className="font-mono text-[13px] tracking-widest uppercase text-[#7A7A7A] mb-2">Assertion</div>
-                <div className="text-xs text-[#EAEAEA] leading-relaxed font-mono">
-                  &ldquo;{ev.assertion}&rdquo;
-                </div>
+      {/* Quick summary cards */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        {evidence.length === 0 && (
+          <div className="text-center py-8 text-xs text-[#3A3A3A] font-mono">
+            No findings. Rule engine active.
+          </div>
+        )}
+        {evidence.map((ev) => {
+          const color = ev.severity === "critical" ? "#FF5454" : ev.severity === "warning" ? "#FFB020" : "#00D1B2";
+          const confColor = ev.confidence === "high" ? "#00D1B2" : ev.confidence === "medium" ? "#FFB020" : "#7A7A7A";
+          return (
+            <div key={ev.id} className="p-3 rounded-sm" style={{ backgroundColor: "#101114", borderLeft: `2px solid ${color}` }}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="text-xs" style={{ color }}>{ev.severity === "critical" ? "✕" : ev.severity === "warning" ? "⚠" : "ℹ"}</span>
+                <span className="font-mono text-xs text-[#EAEAEA]">{ev.assertion}</span>
               </div>
-
-              {/* Right: Observed */}
-              <div className="p-3 rounded-sm" style={{ backgroundColor: "#101114", borderLeft: `2px solid ${ev.severity === "critical" ? "#FF5454" : "#FFB020"}` }}>
-                <div className="font-mono text-[13px] tracking-widest uppercase text-[#7A7A7A] mb-2">Observed Execution</div>
-                <div className="text-xs text-[#FF5454] leading-relaxed font-mono">
-                  {ev.observation}
-                </div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[10px] font-mono" style={{ color: confColor }}>{ev.confidence}</span>
+                <span className="text-[10px] font-mono text-[#3A3A3A]">{ev.source}</span>
               </div>
             </div>
+          );
+        })}
 
-            {/* Evidence chain */}
-            <div className="pt-1">
-              <div className="font-mono text-[13px] tracking-widest uppercase text-[#7A7A7A] mb-2">Evidence Chain</div>
-              <div className="space-y-1">
-                {ev.evidence_chain.map((step, i) => (
-                  <div key={i} className="flex items-start gap-2">
-                    <span className="font-mono text-xs text-[#FCEE0A] flex-shrink-0 mt-0.5">{i + 1}.</span>
-                    <span className="text-[13px] text-[#7A7A7A] font-mono">{step}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Diff link */}
-            {ev.diff_line && onSelectDiff && (
-              <button
-                onClick={() => onSelectDiff(ev.diff_line!)}
-                className="inline-flex items-center gap-1.5 font-mono text-xs text-[#FCEE0A] hover:underline"
-              >
-                <span>→</span> Jump to diff line {ev.diff_line}
-              </button>
-            )}
-          </motion.div>
-        ))}
+        {/* CINEMA link */}
+        {evidence.length > 0 && sessionId && (
+          <div className="pt-3 text-center">
+            <a href={`/replay/${sessionId}`} className="font-mono text-xs text-[#FCEE0A] hover:underline tracking-wider">
+              ◈ FULL ANALYSIS →
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );

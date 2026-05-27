@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { fetchCacheStability, type StabilityInfo, API_BASE } from "@/lib/api";
-import { sessions } from "@/lib/fake-data";
 
 export default function StabilityPage() {
   const [data, setData] = useState<StabilityInfo[] | null>(null);

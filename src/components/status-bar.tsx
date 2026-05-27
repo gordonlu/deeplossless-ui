@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import type { Session } from "@/lib/fake-data";
+import type { Session } from "@/lib/types";
 
 function StatusBadge({ status }: { status: string }) {
   const color = status === "VERIFIED" ? "#00D1B2" : status === "PARTIAL" ? "#FFB020" : status === "CONFLICTED" ? "#FF5454" : "#7A7A7A";

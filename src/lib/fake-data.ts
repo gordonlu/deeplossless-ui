@@ -4,7 +4,7 @@
 export interface SessionEvent {
   id: number;
   timestamp: Date;
-  type: "user_prompt" | "assistant_message" | "tool_call" | "tool_result" | "patch_applied" | "retry" | "stream_interrupt" | "warning" | "evidence_gap" | "claim_detected";
+  type: "user_prompt" | "assistant_message" | "tool_call" | "tool_result" | "patch_applied" | "retry" | "stream_interrupt" | "warning" | "evidence_gap" | "claim_detected" | "exec_result" | "exec_start" | "exec_failed" | "inspection" | "read" | "verification" | "build" | "validation" | "mutation" | "network" | "exec";
   summary: string;
   detail?: string;
   severity?: "info" | "warning" | "critical";
@@ -13,7 +13,7 @@ export interface SessionEvent {
 export interface Evidence {
   id: string;
   severity: "info" | "warning" | "critical";
-  category: "no_test_execution" | "fake_completion" | "todo_masking" | "silent_fallback" | "tool_avoidance" | "tiny_diff_large_task" | "untouched_target_file";
+  category: string;
   assertion: string;
   observation: string;
   evidence_chain: string[];

@@ -5,20 +5,14 @@ import { motion } from "motion/react";
 import { StatusBar } from "@/components/status-bar";
 import { SignalTrace } from "@/components/signal-trace";
 import { ClaimEvidence } from "@/components/claim-evidence";
-import { DiffEvidence } from "@/components/diff-evidence";
 import { ShareCard } from "@/components/share-card";
 import Link from "next/link";
-import { type SessionEvent, type Evidence } from "@/lib/fake-data";
+import { type SessionEvent, type Evidence } from "@/lib/types";
 import { useSessions } from "@/lib/use-sessions";
 import { detectIntegrity } from "@/lib/rule-engine";
-
-type Tab = "trace" | "verification";
-
 export default function Home() {
   const { sessions: apiSessions, status: apiStatus, activeIdx, setActiveIdx } = useSessions();
   const [selectedEvent, setSelectedEvent] = useState<SessionEvent | null>(null);
-  const [activeDiffLine, setActiveDiffLine] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>("trace");
   // Only show scan intro on first visit.  Must start false for SSR to
   // avoid hydration mismatch — actual value is set in useEffect.
   const [loaded, setLoaded] = useState(false);
@@ -37,7 +31,7 @@ export default function Home() {
     label: `#${s.id}`,
     model: s.model,
     started_at: new Date(),
-    tokens: 0,
+    tokens: s.total_tokens || 0,
     event_count: s.event_count || s.events.length,
     warning_count: 0,
     critical_count: 0,
@@ -103,21 +97,22 @@ export default function Home() {
       {/* Session selector */}
       <div className="border-b px-4 py-1.5 flex items-center gap-2 font-mono text-xs tracking-wider uppercase" style={{ borderColor: "#1C1C1C", backgroundColor: "#080808" }}>
         <span className="text-[#7A7A7A]">SESSIONS</span>
-        {displaySessions.map((s, i) => {
-          const det = detectIntegrity(s.events);
-          const statusColor = det.status === "VERIFIED" ? "#00D1B2" : det.status === "CONFLICTED" ? "#FF5454" : "#FFB020";
-          return (
-            <button
-              key={s.id}
-              onClick={() => { setActiveIdx(i); setSelectedEvent(null); setActiveDiffLine(null); }}
-              className={`px-2 py-0.5 rounded-sm transition-colors ${i === activeIdx ? "" : "text-[#7A7A7A] hover:text-[#EAEAEA]"}`}
-              style={i === activeIdx ? { color: statusColor, backgroundColor: `${statusColor}10`, border: `1px solid ${statusColor}30` } : {}}
-            >
-              {s.label}
-              {det.criticalCount > 0 && <span style={{ color: "#FF5454" }}> ●{det.criticalCount}</span>}
-            </button>
-          );
-        })}
+        <select
+          value={activeIdx}
+          onChange={e => { setActiveIdx(Number(e.target.value)); setSelectedEvent(null); }}
+          className="bg-transparent border rounded-sm px-2 py-0.5 font-mono text-xs text-[#EAEAEA] outline-none cursor-pointer"
+          style={{ borderColor: "#1C1C1C", maxWidth: "200px" }}
+        >
+          {displaySessions.map((s, i) => {
+            const det = detectIntegrity(s.events);
+            const crit = det.criticalCount > 0 ? ` ●${det.criticalCount}` : "";
+            return (
+              <option key={s.id} value={i} className="bg-[#0A0A0A] text-[#EAEAEA]">
+                {s.label} ({s.event_count} ev{crit})
+              </option>
+            );
+          })}
+        </select>
         {apiStatus === "live" && (
           <span className="text-[#00D1B2] text-[13px] ml-1">● LIVE</span>
         )}
@@ -134,37 +129,17 @@ export default function Home() {
       <StatusBar session={session} />
 
       <div className="flex-1 flex flex-col lg:flex-row">
-        {/* Left panel */}
-        <div className="w-full lg:w-[360px] flex-shrink-0 border-r flex flex-col" style={{ borderColor: "#1C1C1C" }}>
-          {/* Tabs */}
-          <div className="flex border-b" style={{ borderColor: "#1C1C1C" }}>
-            {(["trace", "verification"] as const).map((key) => (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key)}
-                className={`flex-1 py-2 font-mono text-xs tracking-widest uppercase transition-colors ${
-                  activeTab === key ? "border-b text-[#FCEE0A]" : "text-[#7A7A7A] hover:text-[#EAEAEA]"
-                }`}
-                style={{ borderColor: activeTab === key ? "#FCEE0A" : "transparent" }}
-              >
-                {key === "trace" ? "Signal Trace" : "Verification"}
-              </button>
-            ))}
-          </div>
-
-          {activeTab === "trace" ? (
-            <SignalTrace events={session.events} onSelect={setSelectedEvent} />
-          ) : (
-            <ClaimEvidence evidence={session.evidence} onSelectDiff={setActiveDiffLine} />
-          )}
+        {/* Center: Signal Trace */}
+        <div className="flex-1 flex flex-col min-h-0 max-w-4xl mx-auto w-full">
+          <SignalTrace events={session.events} totalCount={session.event_count} onSelect={setSelectedEvent} />
         </div>
 
-        {/* Right panel */}
-        <div className="flex-1 flex flex-col min-h-0">
-          <DiffEvidence evidence={session.evidence} activeLine={activeDiffLine} />
-          <div className="border-t p-4" style={{ borderColor: "#1C1C1C" }}>
+        {/* Right: Verification + Share */}
+        <div className="w-full lg:w-[440px] flex-shrink-0 border-l flex flex-col" style={{ borderColor: "#1C1C1C" }}>
+          <div className="p-3 border-b" style={{ borderColor: "#1C1C1C" }}>
             <ShareCard session={session} />
           </div>
+          <ClaimEvidence evidence={session.evidence} sessionId={session.id} />
         </div>
       </div>
 
@@ -194,7 +169,7 @@ export default function Home() {
               <div><span className="text-[#7A7A7A]">TYPE: </span><span className="text-[#EAEAEA]">{selectedEvent.type}</span></div>
               <div><span className="text-[#7A7A7A]">SUMMARY: </span><span className="text-[#EAEAEA]">{selectedEvent.summary}</span></div>
               {selectedEvent.detail && (
-                <div className="p-3 rounded-sm font-mono text-[13px] whitespace-pre-wrap" style={{ backgroundColor: "#0A0A0A", color: "#7A7A7A" }}>
+                <div className="p-3 rounded-sm font-mono text-xs whitespace-pre-wrap break-all overflow-auto max-h-60" style={{ backgroundColor: "#0A0A0A", color: "#7A7A7A" }}>
                   {selectedEvent.detail}
                 </div>
               )}

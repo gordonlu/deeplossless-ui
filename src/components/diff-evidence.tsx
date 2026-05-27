@@ -1,44 +1,49 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import type { Evidence } from "@/lib/fake-data";
+import { useRef, useEffect, useMemo } from "react";
+import type { Evidence } from "@/lib/types";
+import type { SessionEvent } from "@/lib/types";
 
-// Fake diff content
-const fakeDiffLines = [
-  { line: 74, type: "context", content: "    /// Reconnect with backoff strategy" },
-  { line: 75, type: "context", content: "    pub async fn reconnect(&self) -> Result<()> {" },
-  { line: 76, type: "context", content: "        tracing::info!(\"starting reconnection\");" },
-  { line: 77, type: "context", content: "" },
-  { line: 78, type: "removed", content: "-       let guard = self.conn_lock.lock().await;" },
-  { line: 79, type: "removed", content: "-       guard.reconnect_async().await;" },
-  { line: 80, type: "added", content: "+       let reconnect_future = {" },
-  { line: 81, type: "added", content: "+           let guard = self.conn_lock.lock().await;" },
-  { line: 82, type: "added", content: "+           guard.reconnect_async()" },
-  { line: 83, type: "added", content: "+       };" },
-  { line: 84, type: "added", content: "+       reconnect_future.await;" },
-  { line: 85, type: "context", content: "        Ok(())" },
-  { line: 86, type: "context", content: "    }" },
-  { line: 87, type: "context", content: "" },
-  { line: 88, type: "context", content: "    /// Handle reconnection state transitions" },
-  { line: 89, type: "context", content: "    fn handle_state(&self, state: ConnState) -> Result<()> {" },
-  { line: 90, type: "context", content: "        match state {" },
-  { line: 91, type: "context", content: "            ConnState::Disconnected => {" },
-  { line: 92, type: "context", content: "                self.reconnect()" },
-  { line: 93, type: "context", content: "            }" },
-  { line: 94, type: "context", content: "        }" },
-  { line: 95, type: "context", content: "    }" },
-  { line: 96, type: "context", content: "" },
-  { line: 97, type: "context", content: "    /// Get connection status with fallback" },
-  { line: 98, type: "context", content: "    pub fn status(&self) -> ConnStatus {" },
-  { line: 99, type: "context", content: "        self.current_status.clone()" },
-  { line: 100, type: "context", content: "    }" },
-  { line: 101, type: "context", content: "}" },
-  { line: 102, type: "removed", content: "-       }).unwrap_or_default();" },
-  { line: 103, type: "added", content: "+       }).map_err(|e| {" },
-  { line: 104, type: "added", content: "+           tracing::error!(\"connection failed: {}\", e);" },
-  { line: 105, type: "added", content: "+           Error::ConnectionFailed(e)" },
-  { line: 106, type: "added", content: "+       })?;" },
-];
+interface DiffLine {
+  line: number;
+  type: "added" | "removed" | "context";
+  content: string;
+}
+
+function extractDiffFromEvents(events: SessionEvent[]): { lines: DiffLine[]; filename: string } | null {
+  // Find patch events and parse their content into diff lines
+  const patches = events.filter(e =>
+    e.type === "patch_applied" ||
+    e.type === "exec_result" ||
+    (e.detail && (e.detail.includes("+ ") || e.detail.includes("- ") || e.detail.includes("@@ ")))
+  );
+
+  if (patches.length === 0) return null;
+
+  const lines: DiffLine[] = [];
+  let filename = "session log";
+
+  for (const patch of patches) {
+    if (!patch.detail) continue;
+    // Try to extract filename from summary
+    const fnMatch = patch.summary.match(/([a-zA-Z0-9_/.]+\.(rs|ts|js|py|go|java|cpp|toml|yaml|json))/);
+    if (fnMatch) filename = fnMatch[1];
+
+    const rawLines = patch.detail.split("\n");
+    for (let i = 0; i < rawLines.length; i++) {
+      const content = rawLines[i];
+      if (content.startsWith("+")) {
+        lines.push({ line: lines.length + 1, type: "added", content });
+      } else if (content.startsWith("-")) {
+        lines.push({ line: lines.length + 1, type: "removed", content });
+      } else if (content.trim()) {
+        lines.push({ line: lines.length + 1, type: "context", content });
+      }
+    }
+  }
+
+  return lines.length > 0 ? { lines: lines.slice(0, 200), filename } : null;
+}
 
 function lineColor(type: string) {
   switch (type) {
@@ -48,8 +53,27 @@ function lineColor(type: string) {
   }
 }
 
-export function DiffEvidence({ evidence, activeLine }: { evidence: Evidence[]; activeLine: number | null }) {
+function extractDiffFromPatches(patches: { role: string; content: string }[]): { lines: DiffLine[]; filename: string } | null {
+  if (patches.length === 0) return null;
+  const lines: DiffLine[] = [];
+  let filename = "patch";
+  for (const p of patches) {
+    const rawLines = p.content.split("\n");
+    for (let i = 0; i < rawLines.length; i++) {
+      const content = rawLines[i];
+      if (content.startsWith("+")) lines.push({ line: lines.length + 1, type: "added", content });
+      else if (content.startsWith("-")) lines.push({ line: lines.length + 1, type: "removed", content });
+      else if (content.trim() && !content.startsWith("@")) lines.push({ line: lines.length + 1, type: "context", content });
+    }
+  }
+  return lines.length > 0 ? { lines: lines.slice(0, 300), filename } : null;
+}
+
+export function DiffEvidence({ events, evidence, activeLine, patches }: { events: SessionEvent[]; evidence: Evidence[]; activeLine: number | null; patches?: { role: string; content: string }[] | null }) {
   const activeRef = useRef<HTMLDivElement>(null);
+  const diffFromEvents = useMemo(() => extractDiffFromEvents(events), [events]);
+  const diffFromPatches = useMemo(() => patches ? extractDiffFromPatches(patches) : null, [patches]);
+  const diff = diffFromPatches || diffFromEvents;
 
   useEffect(() => {
     if (activeRef.current) {
@@ -57,7 +81,6 @@ export function DiffEvidence({ evidence, activeLine }: { evidence: Evidence[]; a
     }
   }, [activeLine]);
 
-  // Find evidence for the active line
   const lineEvidence = evidence.filter(e => e.diff_line === activeLine);
 
   return (
@@ -66,37 +89,42 @@ export function DiffEvidence({ evidence, activeLine }: { evidence: Evidence[]; a
       <div className="flex-1 flex flex-col">
         <div className="px-4 py-3 flex items-center border-b" style={{ borderColor: "#1C1C1C" }}>
           <span className="font-mono text-xs tracking-widest uppercase text-[#7A7A7A]">Diff</span>
-          <span className="ml-2 font-mono text-xs text-[#FCEE0A]">websocket.rs</span>
+          {diff && <span className="ml-2 font-mono text-xs text-[#FCEE0A]">{diff.filename}</span>}
         </div>
         <div className="flex-1 overflow-y-auto font-mono text-xs">
-          {fakeDiffLines.map((dl, i) => {
-            const colors = lineColor(dl.type);
-            const isActive = dl.line === activeLine;
-            const evForLine = evidence.find(e => e.diff_line === dl.line);
-            return (
-              <div
-                key={i}
-                ref={isActive ? activeRef : undefined}
-                className={`flex hover:brightness-125 transition-colors ${isActive ? "ring-1 ring-[#FCEE0A]/40" : ""}`}
-                style={{ backgroundColor: isActive ? `${colors.bg}` : colors.bg }}
-              >
-                {/* Line number */}
-                <span className="w-10 text-right pr-3 flex-shrink-0 select-none text-xs pt-[1px]" style={{ color: "#3A3A3A" }}>
-                  {dl.line}
-                </span>
-                {/* Prefix + content */}
-                <span className="flex-1 whitespace-pre pt-[1px]" style={{ color: colors.text }}>
-                  {dl.content}
-                </span>
-                {/* Evidence marker */}
-                {evForLine && (
-                  <span className="px-2 pt-[1px] text-xs" style={{ color: evForLine.severity === "critical" ? "#FF5454" : "#FFB020" }}>
-                    ⚠ {evForLine.category}
+          {!diff ? (
+            <div className="p-8 text-center space-y-2">
+              <div className="text-sm text-[#7A7A7A] font-mono">NO CODE DIFF DATA</div>
+              <div className="text-xs text-[#3A3A3A]">Diff tracking requires pipeline-level file write interception — coming in v0.7.</div>
+              <div className="text-xs text-[#3A3A3A]">For now, code changes appear in the Signal Trace as <span className="text-[#FF5454]">mutation</span> events.</div>
+            </div>
+          ) : (
+            diff.lines.map((dl, i) => {
+              const colors = lineColor(dl.type);
+              const isActive = dl.line === activeLine;
+              const evForLine = evidence.find(e => e.diff_line === dl.line);
+              return (
+                <div
+                  key={i}
+                  ref={isActive ? activeRef : undefined}
+                  className={`flex hover:brightness-125 transition-colors ${isActive ? "ring-1 ring-[#FCEE0A]/40" : ""}`}
+                  style={{ backgroundColor: isActive ? `${colors.bg}` : colors.bg }}
+                >
+                  <span className="w-10 text-right pr-3 flex-shrink-0 select-none text-xs pt-[1px]" style={{ color: "#3A3A3A" }}>
+                    {dl.line}
                   </span>
-                )}
-              </div>
-            );
-          })}
+                  <span className="flex-1 whitespace-pre pt-[1px]" style={{ color: colors.text }}>
+                    {dl.content}
+                  </span>
+                  {evForLine && (
+                    <span className="px-2 pt-[1px] text-xs" style={{ color: evForLine.severity === "critical" ? "#FF5454" : "#FFB020" }}>
+                      ⚠ {evForLine.category}
+                    </span>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 

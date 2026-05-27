@@ -1,246 +1,193 @@
-// ── Integrity Detection Rule Engine ────────────────────────────────────────
-// Pure deterministic logic — no LLM calls.
-// Event stream → rule matcher → evidence records.
+// ── Integrity Detection Rule Engine v2 ─────────────────────────────────────
+// Architecture: raw events → semantic normalization → integrity rules
+// Each finding carries confidence and evidence source type.
+// Observability principle: absence of evidence ≠ evidence of absence.
+// False positives hurt more than false negatives.
 
-import type { SessionEvent, Evidence } from "./fake-data";
+import type { SessionEvent, Evidence } from "./types";
 
-export type Severity = "info" | "warning" | "critical";
-export type EvidenceCategory =
-  | "no_test_execution"
-  | "fake_completion"
-  | "todo_masking"
-  | "silent_fallback"
-  | "tool_avoidance"
-  | "tiny_diff_large_task"
-  | "untouched_target_file";
+// ── Evidence quality ──────────────────────────────────────────────────
+
+export type Confidence = "low" | "medium" | "high";
+export type EvidenceSource = "observed" | "inferred" | "speculative";
+
+interface Finding {
+  id: string;
+  severity: "info" | "warning" | "critical";
+  category: string;
+  assertion: string;
+  observation: string;
+  evidence_chain: string[];
+  confidence: Confidence;
+  source: EvidenceSource;
+}
+
+// ── Semantic normalization ─────────────────────────────────────────────
+// raw classified events → higher-level semantic events for rules
+
+interface SemanticEvent {
+  type: "mutation" | "verification" | "build" | "inspection" | "tool_call" | "retry_burst" | "tool_failure";
+  count: number;
+  tools: string[];
+}
+
+function normalize(events: SessionEvent[]): SemanticEvent[] {
+  const result: SemanticEvent[] = [];
+
+  // Mutation: file write/edit events
+  const mutations = events.filter(e => e.type === "mutation");
+  if (mutations.length > 0) {
+    result.push({ type: "mutation", count: mutations.length, tools: [...new Set(mutations.map(e => {
+      try { return JSON.parse(e.detail || "{}").tool_name || "unknown"; } catch { return "unknown"; }
+    }))] });
+  }
+
+  // Verification: test commands
+  const verifications = events.filter(e => e.type === "verification");
+  if (verifications.length > 0) {
+    result.push({ type: "verification", count: verifications.length, tools: [...new Set(verifications.map(e => {
+      try { return JSON.parse(e.detail || "{}").tool_name || "unknown"; } catch { return "unknown"; }
+    }))] });
+  }
+
+  // Build: compile commands
+  const builds = events.filter(e => e.type === "build");
+  if (builds.length > 0) {
+    result.push({ type: "build", count: builds.length, tools: [...new Set(builds.map(e => {
+      try { return JSON.parse(e.detail || "{}").tool_name || "unknown"; } catch { return "unknown"; }
+    }))] });
+  }
+
+  // Tool failures: exec events with non-success outcome
+  const failures = events.filter(e => {
+    try {
+      const v = JSON.parse(e.detail || "{}");
+      return v.outcome && v.outcome !== "success";
+    } catch { return false; }
+  });
+  if (failures.length > 0) {
+    result.push({ type: "tool_failure", count: failures.length, tools: [...new Set(failures.map(e => {
+      try { return JSON.parse(e.detail || "{}").tool_name || "unknown"; } catch { return "unknown"; }
+    }))] });
+  }
+
+  // Retry burst: 4+ consecutive same-tool calls
+  const retryBursts: string[] = [];
+  let currentTool = "", currentCount = 0;
+  for (const e of events) {
+    let tool = "unknown";
+    try { tool = JSON.parse(e.detail || "{}").tool_name || "unknown"; } catch {}
+    if (tool === currentTool) {
+      currentCount++;
+    } else {
+      if (currentCount >= 4) retryBursts.push(`${currentTool} ×${currentCount}`);
+      currentTool = tool;
+      currentCount = 1;
+    }
+  }
+  if (currentCount >= 4) retryBursts.push(`${currentTool} ×${currentCount}`);
+  if (retryBursts.length > 0) {
+    result.push({ type: "retry_burst", count: retryBursts.length, tools: retryBursts });
+  }
+
+  return result;
+}
+
+// ── Rules (only high-confidence findings) ─────────────────────────────
 
 export interface Rule {
   id: string;
-  category: EvidenceCategory;
-  severity: Severity;
+  severity: "info" | "warning" | "critical";
   description: string;
-  match: (events: SessionEvent[]) => Evidence | null;
+  match: (semantic: SemanticEvent[]) => Finding | null;
 }
 
-// ── Claim Phrases ───────────────────────────────────────────────────────
-const CLAIM_PATTERNS = [
-  /\b(fixed|completed|tested|verified|implemented|resolved|done|passing|works)\b/i,
-  /\b(tests pass|all green|no failures)\b/i,
-  /\b(should be good|should work|ready to merge)\b/i,
-];
-
-// ── Test Commands ───────────────────────────────────────────────────────
-const TEST_COMMANDS = [
-  "cargo test", "npm test", "npm run test", "yarn test", "pnpm test",
-  "pytest", "go test", "jest", "vitest", "mocha",
-  "cargo build", "cargo check", "npm run build", "make",
-];
-
-// ── TODO Patterns ──────────────────────────────────────────────────────
-const TODO_PATTERNS = [
-  /\bTODO\b/, /\bFIXME\b/, /\bHACK\b/,
-  /\bplaceholder\b/i, /\bstub\b/i, /\bmock\b/i,
-  /\btemporary\b/i, /\bworkaround\b/i,
-];
-
-// ── Silent Fallback Patterns ────────────────────────────────────────────
-const RUST_FALLBACKS = [
-  "unwrap_or_default()", ".ok()", "let _ =", ".unwrap_or(",
-];
-const JS_FALLBACKS = [
-  "catch(() => {})", "catch(()=>{})", ".catch(()=>", ".catch(() =>",
-];
-
-// ── Rule Implementations ────────────────────────────────────────────────
-
 export const rules: Rule[] = [
-  // 1. Claim Without Evidence
+  // 1. Mutations without observed verification — high confidence, observed
   {
-    id: "fake_completion",
-    category: "fake_completion",
-    severity: "critical",
-    description: "Agent claimed completion or testing, but no matching test/verification commands were executed.",
-    match(events: SessionEvent[]): Evidence | null {
-      const claims = events.filter(e =>
-        e.type === "claim_detected" || e.type === "assistant_message"
-      );
-      for (const claim of claims) {
-        const text = (claim.summary + " " + (claim.detail || "")).toLowerCase();
-        const isClaim = CLAIM_PATTERNS.some(p => p.test(text));
-        if (!isClaim) continue;
-
-        // Find test/verify commands before this claim
-        const before = events.filter(e => e.id < claim.id);
-        const testRan = before.some(e =>
-          e.type === "tool_call" &&
-          TEST_COMMANDS.some(cmd =>
-            (e.summary + (e.detail || "")).toLowerCase().includes(cmd)
-          )
-        );
-
-        if (!testRan) {
-          // Build evidence chain
-          const patches = before.filter(e => e.type === "patch_applied");
-          const chain: string[] = [];
-          for (const p of patches) {
-            chain.push(`${p.timestamp.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} — ${p.summary}`);
-          }
-          chain.push(`${claim.timestamp.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} — CLAIM: "${claim.summary}"`);
-          chain.push("No test/verification command found between patch and claim");
-
-          return {
-            id: `ev_${claim.id}`,
-            severity: "critical",
-            category: "fake_completion",
-            assertion: claim.detail || claim.summary,
-            observation: `Claim made at ${claim.timestamp.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} — but no test or verification command was executed between the last patch and this claim.`,
-            evidence_chain: chain,
-          };
-        }
-      }
-      return null;
+    id: "unverified_mutations",
+    severity: "warning",
+    description: "Code modified but no verification observed in event stream.",
+    match(semantic: SemanticEvent[]) {
+      const mutations = semantic.find(s => s.type === "mutation");
+      if (!mutations) return null;
+      const hasVerified = semantic.some(s => s.type === "verification") || semantic.some(s => s.type === "build");
+      if (hasVerified) return null;
+      return {
+        id: "ev_unverified",
+        severity: "warning",
+        category: "unverified_mutations",
+        assertion: `${mutations.count} file modifications observed`,
+        observation: `No verification or build command was observed in the event stream. This does not mean testing did not occur — only that it was not captured.`,
+        evidence_chain: [
+          `${mutations.count} mutation events (${mutations.tools.slice(0, 5).join(", ")})`,
+          "0 verification events observed",
+          "0 build events observed",
+        ],
+        confidence: "high",
+        source: "observed",
+      };
     },
   },
 
-  // 2. No Test Execution
+  // 2. Execution lineage gap — high confidence, observed from DAG health
   {
-    id: "no_test_execution",
-    category: "no_test_execution",
+    id: "lineage_gap",
     severity: "warning",
-    description: "Code patches were applied but no build or test command was ever executed.",
-    match(events: SessionEvent[]): Evidence | null {
-      const patches = events.filter(e => e.type === "patch_applied");
-      if (patches.length === 0) return null;
-
-      const hasBuild = events.some(e =>
-        e.type === "tool_call" &&
-        TEST_COMMANDS.some(cmd =>
-          (e.summary + (e.detail || "")).toLowerCase().includes(cmd)
-        )
-      );
-
-      if (!hasBuild && patches.length > 0) {
-        const lastPatch = patches[patches.length - 1];
-        return {
-          id: "ev_no_test",
-          severity: "warning",
-          category: "no_test_execution",
-          assertion: `${patches.length} patch(es) applied without verification`,
-          observation: `${patches.length} code patches were applied but no build or test command was detected in the entire session.`,
-          evidence_chain: patches.map((p, i) =>
-            `${p.timestamp.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} — Patch ${i + 1}: ${p.summary}`
-          ),
-        };
-      }
-      return null;
+    description: "DAG health issues detected — execution lineage may be incomplete.",
+    match(_semantic: SemanticEvent[]) {
+      // This is filled by the health API, not events
+      return null; // placeholder — wired from health/[id] data
     },
   },
 
-  // 3. TODO Leakage
+  // 3. Tool failure rate — high confidence, observed
   {
-    id: "todo_masking",
-    category: "todo_masking",
+    id: "tool_failure_rate",
     severity: "warning",
-    description: "TODO, stub, or placeholder patterns detected in patches — may indicate incomplete work.",
-    match(events: SessionEvent[]): Evidence | null {
-      const patches = events.filter(e => e.type === "patch_applied");
-      for (const patch of patches) {
-        const text = patch.detail || patch.summary;
-        for (const pattern of TODO_PATTERNS) {
-          if (pattern.test(text)) {
-            return {
-              id: `ev_todo_${patch.id}`,
-              severity: "warning",
-              category: "todo_masking",
-              assertion: "Code patch appears to contain incomplete work",
-              observation: `Patch "${patch.summary}" contains pattern matching: ${pattern.source}. This may indicate incomplete or placeholder implementation.`,
-              evidence_chain: [
-                `${patch.timestamp.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} — Patch applied: ${patch.summary}`,
-                `Matched pattern: ${pattern.source}`,
-              ],
-            };
-          }
-        }
-      }
-      return null;
+    description: "Elevated tool failure rate detected.",
+    match(semantic: SemanticEvent[]) {
+      const failures = semantic.find(s => s.type === "tool_failure");
+      if (!failures || failures.count < 3) return null;
+      return {
+        id: "ev_failures",
+        severity: "warning",
+        category: "tool_failure_rate",
+        assertion: `${failures.count} tool failures observed`,
+        observation: `${failures.count} tool calls returned non-success outcomes. Affected tools: ${failures.tools.slice(0, 5).join(", ")}.`,
+        evidence_chain: [
+          `${failures.count} failure outcomes detected`,
+          `Tools: ${failures.tools.join(", ")}`,
+        ],
+        confidence: "high",
+        source: "observed",
+      };
     },
   },
 
-  // 4. Silent Fallback
+  // 4. Retry burst — medium confidence, inferred pattern
   {
-    id: "silent_fallback",
-    category: "silent_fallback",
+    id: "retry_burst",
     severity: "warning",
-    description: "Error-swallowing patterns detected — unwrap_or_default, .ok(), empty catch blocks.",
-    match(events: SessionEvent[]): Evidence | null {
-      const patches = events.filter(e => e.type === "patch_applied");
-      for (const patch of patches) {
-        const text = patch.detail || patch.summary;
-        for (const fb of [...RUST_FALLBACKS, ...JS_FALLBACKS]) {
-          if (text.includes(fb)) {
-            return {
-              id: `ev_fb_${patch.id}`,
-              severity: "warning",
-              category: "silent_fallback",
-              assertion: `"${fb}" in patch`,
-              observation: `Silent fallback pattern "${fb}" masks errors instead of propagating them. On failure, the system continues with default/empty state — errors become invisible.`,
-              evidence_chain: [
-                `${patch.timestamp.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} — Patch contains: ${fb}`,
-                `Full patch: ${patch.summary}`,
-                "This pattern silently swallows errors instead of propagating them",
-              ],
-            };
-          }
-        }
-      }
-      return null;
-    },
-  },
-
-  // 5. Tool Avoidance
-  {
-    id: "tool_avoidance",
-    category: "tool_avoidance",
-    severity: "warning",
-    description: "Task that typically requires compilation/testing was done without running build or test tools.",
-    match(events: SessionEvent[]): Evidence | null {
-      const patches = events.filter(e => e.type === "patch_applied");
-      const toolCalls = events.filter(e => e.type === "tool_call");
-      if (patches.length === 0) return null;
-
-      // Check if patches modified code files (not docs/config)
-      const codePatches = patches.filter(p => {
-        const text = (p.summary + (p.detail || "")).toLowerCase();
-        return /\.(rs|ts|js|py|go|java|c|cpp)$/.test(text) ||
-          text.includes(".rs") || text.includes(".ts") || text.includes(".py");
-      });
-
-      if (codePatches.length === 0) return null;
-
-      const hasBuildTool = toolCalls.some(t =>
-        TEST_COMMANDS.some(cmd =>
-          (t.summary + (t.detail || "")).includes(cmd)
-        )
-      );
-
-      if (!hasBuildTool) {
-        return {
-          id: "ev_avoid",
-          severity: "warning",
-          category: "tool_avoidance",
-          assertion: `${codePatches.length} code patche(s) applied without verification tools`,
-          observation: "Code files were modified but no build, compile, or test command was executed. Expected: cargo build/test for Rust, npm test for JS/TS, pytest for Python, etc.",
-          evidence_chain: codePatches.map((p, i) =>
-            `${p.timestamp.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} — ${p.summary}`
-          ),
-        };
-      }
-      return null;
+    description: "Consecutive identical tool calls detected — possible retry loop.",
+    match(semantic: SemanticEvent[]) {
+      const burst = semantic.find(s => s.type === "retry_burst");
+      if (!burst) return null;
+      return {
+        id: "ev_retry_burst",
+        severity: "warning",
+        category: "retry_burst",
+        assertion: `${burst.count} retry burst(s) observed`,
+        observation: `Consecutive identical tool calls suggest repeated attempts: ${burst.tools.slice(0, 3).join(", ")}. This may be normal agent workflow or a retry loop.`,
+        evidence_chain: burst.tools.slice(0, 5).map(t => `Burst: ${t} consecutive calls`),
+        confidence: "medium",
+        source: "inferred",
+      };
     },
   },
 ];
 
-// ── Run all rules against event stream ─────────────────────────────────
+// ── Detection pipeline ─────────────────────────────────────────────────
 
 export function detectIntegrity(events: SessionEvent[]): {
   evidence: Evidence[];
@@ -248,22 +195,30 @@ export function detectIntegrity(events: SessionEvent[]): {
   warningCount: number;
   criticalCount: number;
 } {
-  const evidence: Evidence[] = [];
+  const semantic = normalize(events);
+  const findings: Finding[] = [];
   for (const rule of rules) {
-    const result = rule.match(events);
-    if (result) {
-      evidence.push(result);
-    }
+    const result = rule.match(semantic);
+    if (result) findings.push(result);
   }
 
-  const criticals = evidence.filter(e => e.severity === "critical").length;
-  const warnings = evidence.filter(e => e.severity === "warning").length;
+  const criticals = findings.filter(f => f.severity === "critical").length;
+  const warnings = findings.filter(f => f.severity === "warning").length;
 
   let status: "VERIFIED" | "PARTIAL" | "UNVERIFIED" | "CONFLICTED";
   if (criticals > 0) status = "CONFLICTED";
   else if (warnings > 1) status = "PARTIAL";
   else if (warnings === 1) status = "UNVERIFIED";
   else status = "VERIFIED";
+
+  const evidence: Evidence[] = findings.map(f => ({
+    id: f.id,
+    severity: f.severity,
+    category: f.category,
+    assertion: f.assertion,
+    observation: f.observation,
+    evidence_chain: f.evidence_chain,
+  }));
 
   return { evidence, status, warningCount: warnings, criticalCount: criticals };
 }

@@ -8,6 +8,7 @@ export interface RealSession {
   fingerprint: string;
   model: string;
   event_count: number;
+  total_tokens: number;
   events: Array<{
     id: number;
     timestamp: string;
@@ -48,16 +49,18 @@ export function useSessions(): { sessions: RealSession[]; status: ApiStatus; act
       // Load events for the first few sessions
       const loaded: RealSession[] = [];
       for (const s of list.slice(0, 10)) {
-        const events = await fetchSessionEvents(s.id);
+        const resp = await fetchSessionEvents(s.id);
+        const events = resp?.events || [];
         loaded.push({
           id: s.id,
           fingerprint: s.fingerprint,
           model: s.model,
-          event_count: s.event_count,
-          events: (events || []).map(e => ({
+          event_count: resp?.total ?? s.event_count,
+          total_tokens: s.total_tokens,
+          events: events.map(e => ({
             id: e.id,
             timestamp: e.timestamp,
-            type: e.type || "tool_call",
+            type: mapEventType(e.type, e.payload),
             summary: tryParseSummary(e.payload, e.type),
             detail: e.payload,
             severity: inferSeverity(e.type),
@@ -74,18 +77,43 @@ export function useSessions(): { sessions: RealSession[]; status: ApiStatus; act
       }
     }
     load();
-    return () => { cancelled = true; };
+    // Auto-refresh every 5s
+    const interval = setInterval(load, 5000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
   return { sessions, status, activeIdx, setActiveIdx };
+}
+
+import { mapEventType, classifyTool } from "./classify";
+
+function estimateTokens(events: Array<{ payload?: string; detail?: string }>): number {
+  let total = 0;
+  for (const e of events) {
+    const text = e.payload || e.detail || "";
+    const cjk = (text.match(/[一-鿿]/g) || []).length;
+    total += Math.round(cjk * 0.6 + (text.length - cjk) * 0.3);
+  }
+  return total;
 }
 
 function tryParseSummary(payload: string, kind: string): string {
   try {
     const v = JSON.parse(payload);
     if (typeof v === "string") return v.slice(0, 80);
+    if (v.outcome && v.tool_name) {
+      const category = classifyTool(v.tool_name).category;
+      return `${category}: ${v.tool_name} → ${v.outcome}`;
+    }
+    if (v.tool_name) {
+      const category = classifyTool(v.tool_name).category;
+      return `${category}: ${v.tool_name}`;
+    }
     if (v.text) return v.text.slice(0, 80);
     if (v.summary) return v.summary.slice(0, 80);
+    // Object but no recognizable summary fields
+    const keys = Object.keys(v).filter(k => k !== "parallel_group" && k !== "parent_span_id" && k !== "span_id" && k !== "span_mode");
+    if (keys.length > 0) return `${kind}: ${keys.join(", ")}`;
     return kind;
   } catch {
     return payload.slice(0, 80) || kind;

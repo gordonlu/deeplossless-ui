@@ -17,6 +17,7 @@ export interface SessionSummary {
   fingerprint: string;
   model: string;
   event_count: number;
+  total_tokens: number;
 }
 
 export interface SessionEventRaw {
@@ -25,6 +26,13 @@ export interface SessionEventRaw {
   payload: string;
   seq_no: number;
   timestamp: string;
+}
+
+export interface SessionEventsResponse {
+  session_id: number;
+  events: SessionEventRaw[];
+  total: number;
+  tool_counts: { tool: string; count: number }[];
 }
 
 export interface StabilityInfo {
@@ -40,9 +48,18 @@ export async function fetchSessions(): Promise<SessionSummary[] | null> {
   return data?.sessions ?? null;
 }
 
-export async function fetchSessionEvents(id: number): Promise<SessionEventRaw[] | null> {
-  const data = await get<{ events: SessionEventRaw[] }>(`/sessions/${id}/events?limit=200`);
-  return data?.events ?? null;
+export async function fetchSessionEvents(id: number, limit = 1000): Promise<SessionEventsResponse | null> {
+  return await get<SessionEventsResponse>(`/sessions/${id}/events?limit=${limit}`);
+}
+
+export interface PatchItem {
+  role: string;
+  content: string;
+}
+
+export async function fetchSessionPatches(id: number): Promise<PatchItem[] | null> {
+  const data = await get<{ patches: PatchItem[] }>(`/sessions/${id}/patches?limit=20`);
+  return data?.patches ?? null;
 }
 
 export async function fetchCacheStability(): Promise<StabilityInfo[] | null> {
