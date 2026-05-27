@@ -90,6 +90,7 @@ export default function Home() {
         <Link href={`/replay/${session.id}`} className="text-[#FCEE0A] hover:underline text-[10px] tracking-[0.15em] font-semibold mr-4">◈ CINEMA</Link>
         <Link href={`/plan/${session.id}`} className="text-[#FFB020] hover:underline text-[10px] tracking-[0.15em] font-semibold mr-4">↗ DIVERGENCE</Link>
         <Link href={`/health/${session.id}`} className="text-[#FF5454] hover:underline text-[10px] tracking-[0.15em] font-semibold mr-4">⚠ CORRUPTION</Link>
+        <Link href="/stability" className="text-[#00D1B2] hover:underline text-[10px] tracking-[0.15em] font-semibold mr-4">∿ STABILITY</Link>
       </div>
       <StatusBar session={session} />
 
