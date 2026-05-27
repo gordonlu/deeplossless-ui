@@ -1,14 +1,14 @@
 // ── API client for deeplossless proxy ────────────────────────────────────
 
-const BASE = process.env.NEXT_PUBLIC_DEEPLOSSLESS_URL || "http://localhost:8080/v1/lcm";
+export const API_BASE = process.env.NEXT_PUBLIC_DEEPLOSSLESS_URL || "http://localhost:8081/v1/lcm";
 
 async function get<T>(path: string): Promise<T | null> {
   try {
-    const res = await fetch(`${BASE}${path}`, { signal: AbortSignal.timeout(3000) });
+    const res = await fetch(`${API_BASE}${path}`, { signal: AbortSignal.timeout(3000) });
     if (!res.ok) return null;
     return await res.json();
   } catch {
-    return null; // API unavailable → fall back to fake data
+    return null;
   }
 }
 

@@ -66,7 +66,7 @@ export function DiffEvidence({ evidence, activeLine }: { evidence: Evidence[]; a
       <div className="flex-1 flex flex-col">
         <div className="px-4 py-3 flex items-center border-b" style={{ borderColor: "#1C1C1C" }}>
           <span className="font-mono text-xs tracking-widest uppercase text-[#7A7A7A]">Diff</span>
-          <span className="ml-2 font-mono text-[10px] text-[#FCEE0A]">websocket.rs</span>
+          <span className="ml-2 font-mono text-xs text-[#FCEE0A]">websocket.rs</span>
         </div>
         <div className="flex-1 overflow-y-auto font-mono text-xs">
           {fakeDiffLines.map((dl, i) => {
@@ -81,7 +81,7 @@ export function DiffEvidence({ evidence, activeLine }: { evidence: Evidence[]; a
                 style={{ backgroundColor: isActive ? `${colors.bg}` : colors.bg }}
               >
                 {/* Line number */}
-                <span className="w-10 text-right pr-3 flex-shrink-0 select-none text-[10px] pt-[1px]" style={{ color: "#3A3A3A" }}>
+                <span className="w-10 text-right pr-3 flex-shrink-0 select-none text-xs pt-[1px]" style={{ color: "#3A3A3A" }}>
                   {dl.line}
                 </span>
                 {/* Prefix + content */}
@@ -90,7 +90,7 @@ export function DiffEvidence({ evidence, activeLine }: { evidence: Evidence[]; a
                 </span>
                 {/* Evidence marker */}
                 {evForLine && (
-                  <span className="px-2 pt-[1px] text-[10px]" style={{ color: evForLine.severity === "critical" ? "#FF5454" : "#FFB020" }}>
+                  <span className="px-2 pt-[1px] text-xs" style={{ color: evForLine.severity === "critical" ? "#FF5454" : "#FFB020" }}>
                     ⚠ {evForLine.category}
                   </span>
                 )}
@@ -118,7 +118,7 @@ export function DiffEvidence({ evidence, activeLine }: { evidence: Evidence[]; a
                     className="inline-block w-2 h-2 rounded-full"
                     style={{ backgroundColor: ev.severity === "critical" ? "#FF5454" : "#FFB020" }}
                   />
-                  <span className="font-mono text-[10px] tracking-wider uppercase" style={{ color: ev.severity === "critical" ? "#FF5454" : "#FFB020" }}>
+                  <span className="font-mono text-xs tracking-wider uppercase" style={{ color: ev.severity === "critical" ? "#FF5454" : "#FFB020" }}>
                     {ev.severity}
                   </span>
                 </div>
@@ -128,8 +128,8 @@ export function DiffEvidence({ evidence, activeLine }: { evidence: Evidence[]; a
                 <div className="pt-2 space-y-1">
                   {ev.evidence_chain.map((step, i) => (
                     <div key={i} className="flex items-start gap-1.5">
-                      <span className="text-[10px] text-[#FCEE0A] flex-shrink-0 font-mono">{i + 1}.</span>
-                      <span className="text-[10px] text-[#7A7A7A] font-mono">{step}</span>
+                      <span className="text-xs text-[#FCEE0A] flex-shrink-0 font-mono">{i + 1}.</span>
+                      <span className="text-xs text-[#7A7A7A] font-mono">{step}</span>
                     </div>
                   ))}
                 </div>

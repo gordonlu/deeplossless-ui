@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
 import { StatusBar } from "@/components/status-bar";
 import { SignalTrace } from "@/components/signal-trace";
@@ -8,33 +8,54 @@ import { ClaimEvidence } from "@/components/claim-evidence";
 import { DiffEvidence } from "@/components/diff-evidence";
 import { ShareCard } from "@/components/share-card";
 import Link from "next/link";
-import { sessions, type SessionEvent } from "@/lib/fake-data";
+import { type SessionEvent, type Evidence } from "@/lib/fake-data";
+import { useSessions } from "@/lib/use-sessions";
 import { detectIntegrity } from "@/lib/rule-engine";
 
 type Tab = "trace" | "verification";
 
 export default function Home() {
-  const [activeSessionIdx, setActiveSessionIdx] = useState(0);
+  const { sessions: apiSessions, status: apiStatus, activeIdx, setActiveIdx } = useSessions();
   const [selectedEvent, setSelectedEvent] = useState<SessionEvent | null>(null);
   const [activeDiffLine, setActiveDiffLine] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("trace");
-  // Only show scan intro on first visit (per browser tab session)
-  const [loaded, setLoaded] = useState(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem("dl_scan_seen") === "1";
+  // Only show scan intro on first visit.  Must start false for SSR to
+  // avoid hydration mismatch — actual value is set in useEffect.
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    if (sessionStorage.getItem("dl_scan_seen") === "1") {
+      setLoaded(true);
     }
-    return false;
-  });
+  }, []);
   function skipScan() {
     sessionStorage.setItem("dl_scan_seen", "1");
     setLoaded(true);
   }
 
-  const rawSession = sessions[activeSessionIdx];
-  // Run rule engine on the session events
-  const detection = useMemo(() => detectIntegrity(rawSession.events), [rawSession]);
-  // Merge rule engine output with pre-crafted evidence
-  const session = useMemo(() => ({
+  const displaySessions = apiSessions.map(s => ({
+    id: String(s.id),
+    label: `#${s.id}`,
+    model: s.model,
+    started_at: new Date(),
+    tokens: 0,
+    event_count: s.event_count || s.events.length,
+    warning_count: 0,
+    critical_count: 0,
+    integrity_status: "UNVERIFIED" as const,
+    events: s.events.map(e => ({
+      id: e.id,
+      timestamp: new Date(e.timestamp || Date.now()),
+      type: (e.type === "TextDelta" ? "assistant_message" : e.type === "ToolCallStart" ? "tool_call" : e.type === "ToolCallArgsDelta" ? "tool_call" : e.type) as SessionEvent["type"],
+      summary: e.summary || e.type,
+      detail: e.detail,
+      severity: e.severity,
+    })),
+    evidence: s.evidence as Evidence[],
+  }));
+
+  const rawSession = displaySessions[activeIdx] ?? null;
+  const detection = useMemo(() => rawSession ? detectIntegrity(rawSession.events) : { evidence: [], status: "UNVERIFIED" as const, warningCount: 0, criticalCount: 0 }, [rawSession]);
+  const session = useMemo(() => rawSession ? ({
     ...rawSession,
     evidence: [...rawSession.evidence, ...detection.evidence.filter(
       de => !rawSession.evidence.some(pe => pe.category === de.category)
@@ -42,7 +63,7 @@ export default function Home() {
     integrity_status: detection.status,
     warning_count: detection.warningCount,
     critical_count: detection.criticalCount,
-  }), [rawSession, detection]);
+  }) : null, [rawSession, detection]);
 
   // Forensic scan intro (~800ms, skippable)
   if (!loaded) {
@@ -66,31 +87,49 @@ export default function Home() {
     );
   }
 
+  if (!session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#0A0A0A" }}>
+        <div className="text-center space-y-3 font-mono">
+          <div className="text-2xl font-bold text-[#FF5454] tracking-widest">API NOT READY</div>
+          <div className="text-base text-[#7A7A7A] mt-2">Make requests through deeplossless to see sessions.</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#0A0A0A" }}>
       {/* Session selector */}
-      <div className="border-b px-4 py-1.5 flex items-center gap-2 font-mono text-[10px] tracking-wider uppercase" style={{ borderColor: "#1C1C1C", backgroundColor: "#080808" }}>
+      <div className="border-b px-4 py-1.5 flex items-center gap-2 font-mono text-xs tracking-wider uppercase" style={{ borderColor: "#1C1C1C", backgroundColor: "#080808" }}>
         <span className="text-[#7A7A7A]">SESSIONS</span>
-        {sessions.map((s, i) => {
+        {displaySessions.map((s, i) => {
           const det = detectIntegrity(s.events);
           const statusColor = det.status === "VERIFIED" ? "#00D1B2" : det.status === "CONFLICTED" ? "#FF5454" : "#FFB020";
           return (
             <button
               key={s.id}
-              onClick={() => { setActiveSessionIdx(i); setSelectedEvent(null); setActiveDiffLine(null); }}
-              className={`px-2 py-0.5 rounded-sm transition-colors ${i === activeSessionIdx ? "" : "text-[#7A7A7A] hover:text-[#EAEAEA]"}`}
-              style={i === activeSessionIdx ? { color: statusColor, backgroundColor: `${statusColor}10`, border: `1px solid ${statusColor}30` } : {}}
+              onClick={() => { setActiveIdx(i); setSelectedEvent(null); setActiveDiffLine(null); }}
+              className={`px-2 py-0.5 rounded-sm transition-colors ${i === activeIdx ? "" : "text-[#7A7A7A] hover:text-[#EAEAEA]"}`}
+              style={i === activeIdx ? { color: statusColor, backgroundColor: `${statusColor}10`, border: `1px solid ${statusColor}30` } : {}}
             >
               {s.label}
               {det.criticalCount > 0 && <span style={{ color: "#FF5454" }}> ●{det.criticalCount}</span>}
             </button>
           );
         })}
+        {apiStatus === "live" && (
+          <span className="text-[#00D1B2] text-[13px] ml-1">● LIVE</span>
+        )}
+        {apiStatus === "error" && (
+          <span className="text-[#FF5454] text-[13px] ml-1">API NOT READY</span>
+        )}
         <span className="flex-1" />
-        <Link href={`/replay/${session.id}`} className="text-[#FCEE0A] hover:underline text-[10px] tracking-[0.15em] font-semibold mr-4">◈ CINEMA</Link>
-        <Link href={`/plan/${session.id}`} className="text-[#FFB020] hover:underline text-[10px] tracking-[0.15em] font-semibold mr-4">↗ DIVERGENCE</Link>
-        <Link href={`/health/${session.id}`} className="text-[#FF5454] hover:underline text-[10px] tracking-[0.15em] font-semibold mr-4">⚠ CORRUPTION</Link>
-        <Link href="/stability" className="text-[#00D1B2] hover:underline text-[10px] tracking-[0.15em] font-semibold mr-4">∿ STABILITY</Link>
+        <Link href={`/replay/${session.id}`} className="text-[#FCEE0A] hover:underline text-xs tracking-[0.15em] font-semibold mr-4">◈ CINEMA</Link>
+        <Link href={`/plan/${session.id}`} className="text-[#FFB020] hover:underline text-xs tracking-[0.15em] font-semibold mr-4">↗ DIVERGENCE</Link>
+        <Link href={`/health/${session.id}`} className="text-[#FF5454] hover:underline text-xs tracking-[0.15em] font-semibold mr-4">⚠ CORRUPTION</Link>
+        <div className="flex-1" />
+        <Link href="/stability" className="px-3 py-1.5 rounded-sm text-[#00D1B2] hover:underline text-xs tracking-[0.15em] font-bold border" style={{ borderColor: "#00D1B230", backgroundColor: "#00D1B208" }}>⚡ CACHE STABILITY</Link>
       </div>
       <StatusBar session={session} />
 
@@ -103,7 +142,7 @@ export default function Home() {
               <button
                 key={key}
                 onClick={() => setActiveTab(key)}
-                className={`flex-1 py-2 font-mono text-[10px] tracking-widest uppercase transition-colors ${
+                className={`flex-1 py-2 font-mono text-xs tracking-widest uppercase transition-colors ${
                   activeTab === key ? "border-b text-[#FCEE0A]" : "text-[#7A7A7A] hover:text-[#EAEAEA]"
                 }`}
                 style={{ borderColor: activeTab === key ? "#FCEE0A" : "transparent" }}
@@ -155,7 +194,7 @@ export default function Home() {
               <div><span className="text-[#7A7A7A]">TYPE: </span><span className="text-[#EAEAEA]">{selectedEvent.type}</span></div>
               <div><span className="text-[#7A7A7A]">SUMMARY: </span><span className="text-[#EAEAEA]">{selectedEvent.summary}</span></div>
               {selectedEvent.detail && (
-                <div className="p-3 rounded-sm font-mono text-[11px] whitespace-pre-wrap" style={{ backgroundColor: "#0A0A0A", color: "#7A7A7A" }}>
+                <div className="p-3 rounded-sm font-mono text-[13px] whitespace-pre-wrap" style={{ backgroundColor: "#0A0A0A", color: "#7A7A7A" }}>
                   {selectedEvent.detail}
                 </div>
               )}

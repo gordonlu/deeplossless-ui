@@ -10,7 +10,7 @@ function SeverityBadge({ severity }: { severity: Evidence["severity"] }) {
     info: "#00D1B2",
   };
   return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-sm" style={{ color: colors[severity], backgroundColor: `${colors[severity]}15`, border: `1px solid ${colors[severity]}30` }}>
+    <span className="inline-flex items-center gap-1.5 font-mono text-xs tracking-wider uppercase px-2 py-0.5 rounded-sm" style={{ color: colors[severity], backgroundColor: `${colors[severity]}15`, border: `1px solid ${colors[severity]}30` }}>
       <span className="inline-block w-1 h-1 rounded-full" style={{ backgroundColor: colors[severity] }} />
       {severity}
     </span>
@@ -24,9 +24,9 @@ export function ClaimEvidence({ evidence, onSelectDiff }: { evidence: Evidence[]
       <div className="px-4 py-3 flex items-center justify-between border-b" style={{ borderColor: "#1C1C1C" }}>
         <div className="flex items-center gap-2">
           <span className="font-mono text-xs tracking-widest uppercase text-[#FCEE0A]">Verification Gap</span>
-          <span className="font-mono text-[10px] text-[#7A7A7A]">{evidence.length} gaps</span>
+          <span className="font-mono text-xs text-[#7A7A7A]">{evidence.length} gaps</span>
         </div>
-        <span className="font-mono text-[10px] text-[#7A7A7A]">ASSERTION ↔ OBSERVED EXECUTION</span>
+        <span className="font-mono text-xs text-[#7A7A7A]">ASSERTION ↔ OBSERVED EXECUTION</span>
       </div>
 
       {/* Evidence list */}
@@ -43,14 +43,14 @@ export function ClaimEvidence({ evidence, onSelectDiff }: { evidence: Evidence[]
             {/* Severity + category */}
             <div className="flex items-center gap-2">
               <SeverityBadge severity={ev.severity} />
-              <span className="font-mono text-[10px] text-[#EAEAEA]">{ev.id}</span>
+              <span className="font-mono text-xs text-[#EAEAEA]">{ev.id}</span>
             </div>
 
             {/* Confrontation: Assertion vs Observation */}
             <div className="grid grid-cols-[1fr_1fr] gap-3">
               {/* Left: Assertion */}
               <div className="p-3 rounded-sm" style={{ backgroundColor: "#101114", borderLeft: "2px solid #FCEE0A" }}>
-                <div className="font-mono text-[9px] tracking-widest uppercase text-[#7A7A7A] mb-2">Assertion</div>
+                <div className="font-mono text-[13px] tracking-widest uppercase text-[#7A7A7A] mb-2">Assertion</div>
                 <div className="text-xs text-[#EAEAEA] leading-relaxed font-mono">
                   &ldquo;{ev.assertion}&rdquo;
                 </div>
@@ -58,7 +58,7 @@ export function ClaimEvidence({ evidence, onSelectDiff }: { evidence: Evidence[]
 
               {/* Right: Observed */}
               <div className="p-3 rounded-sm" style={{ backgroundColor: "#101114", borderLeft: `2px solid ${ev.severity === "critical" ? "#FF5454" : "#FFB020"}` }}>
-                <div className="font-mono text-[9px] tracking-widest uppercase text-[#7A7A7A] mb-2">Observed Execution</div>
+                <div className="font-mono text-[13px] tracking-widest uppercase text-[#7A7A7A] mb-2">Observed Execution</div>
                 <div className="text-xs text-[#FF5454] leading-relaxed font-mono">
                   {ev.observation}
                 </div>
@@ -67,12 +67,12 @@ export function ClaimEvidence({ evidence, onSelectDiff }: { evidence: Evidence[]
 
             {/* Evidence chain */}
             <div className="pt-1">
-              <div className="font-mono text-[9px] tracking-widest uppercase text-[#7A7A7A] mb-2">Evidence Chain</div>
+              <div className="font-mono text-[13px] tracking-widest uppercase text-[#7A7A7A] mb-2">Evidence Chain</div>
               <div className="space-y-1">
                 {ev.evidence_chain.map((step, i) => (
                   <div key={i} className="flex items-start gap-2">
-                    <span className="font-mono text-[10px] text-[#FCEE0A] flex-shrink-0 mt-0.5">{i + 1}.</span>
-                    <span className="text-[11px] text-[#7A7A7A] font-mono">{step}</span>
+                    <span className="font-mono text-xs text-[#FCEE0A] flex-shrink-0 mt-0.5">{i + 1}.</span>
+                    <span className="text-[13px] text-[#7A7A7A] font-mono">{step}</span>
                   </div>
                 ))}
               </div>
@@ -82,7 +82,7 @@ export function ClaimEvidence({ evidence, onSelectDiff }: { evidence: Evidence[]
             {ev.diff_line && onSelectDiff && (
               <button
                 onClick={() => onSelectDiff(ev.diff_line!)}
-                className="inline-flex items-center gap-1.5 font-mono text-[10px] text-[#FCEE0A] hover:underline"
+                className="inline-flex items-center gap-1.5 font-mono text-xs text-[#FCEE0A] hover:underline"
               >
                 <span>→</span> Jump to diff line {ev.diff_line}
               </button>

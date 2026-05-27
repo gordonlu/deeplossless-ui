@@ -44,7 +44,7 @@ export function ShareCard({ session }: { session: Session }) {
           <div className="text-lg font-semibold tracking-widest uppercase" style={{ color: "#FCEE0A" }}>
             ◈ deep·loss·less
           </div>
-          <div className="text-[10px] tracking-widest uppercase" style={{ color: "#7A7A7A" }}>
+          <div className="text-xs tracking-widest uppercase" style={{ color: "#7A7A7A" }}>
             Forensic Execution Report
           </div>
         </div>
@@ -56,15 +56,15 @@ export function ShareCard({ session }: { session: Session }) {
         <div className="grid grid-cols-3 gap-3 text-center">
           <div>
             <div className="text-lg font-semibold" style={{ color: "#EAEAEA" }}>{session.event_count}</div>
-            <div className="text-[9px] tracking-wider uppercase" style={{ color: "#7A7A7A" }}>Events</div>
+            <div className="text-[13px] tracking-wider uppercase" style={{ color: "#7A7A7A" }}>Events</div>
           </div>
           <div>
             <div className="text-lg font-semibold" style={{ color: "#FFB020" }}>{session.warning_count}</div>
-            <div className="text-[9px] tracking-wider uppercase" style={{ color: "#FFB020" }}>Warnings</div>
+            <div className="text-[13px] tracking-wider uppercase" style={{ color: "#FFB020" }}>Warnings</div>
           </div>
           <div>
             <div className="text-lg font-semibold" style={{ color: "#FF5454" }}>{session.critical_count}</div>
-            <div className="text-[9px] tracking-wider uppercase" style={{ color: "#FF5454" }}>Critical</div>
+            <div className="text-[13px] tracking-wider uppercase" style={{ color: "#FF5454" }}>Critical</div>
           </div>
         </div>
 
@@ -78,13 +78,13 @@ export function ShareCard({ session }: { session: Session }) {
         {/* Key findings */}
         {criticals.length > 0 && (
           <div className="space-y-2">
-            <div className="text-[10px] tracking-widest uppercase" style={{ color: "#FF5454" }}>Critical Findings</div>
+            <div className="text-xs tracking-widest uppercase" style={{ color: "#FF5454" }}>Critical Findings</div>
             {criticals.map(ev => (
               <div key={ev.id} className="p-3 rounded-sm" style={{ backgroundColor: "#101114", borderLeft: "2px solid #FF5454" }}>
-                <div className="text-[10px] font-semibold mb-1" style={{ color: "#FF5454" }}>ASSERTION</div>
-                <div className="text-[11px] mb-2" style={{ color: "#EAEAEA" }}>&ldquo;{ev.assertion.slice(0, 80)}&rdquo;</div>
-                <div className="text-[10px] font-semibold mb-1" style={{ color: "#FFB020" }}>OBSERVED</div>
-                <div className="text-[10px]" style={{ color: "#FF5454" }}>{ev.observation.slice(0, 120)}</div>
+                <div className="text-xs font-semibold mb-1" style={{ color: "#FF5454" }}>ASSERTION</div>
+                <div className="text-[13px] mb-2" style={{ color: "#EAEAEA" }}>&ldquo;{ev.assertion.slice(0, 80)}&rdquo;</div>
+                <div className="text-xs font-semibold mb-1" style={{ color: "#FFB020" }}>OBSERVED</div>
+                <div className="text-xs" style={{ color: "#FF5454" }}>{ev.observation.slice(0, 120)}</div>
               </div>
             ))}
           </div>
@@ -92,7 +92,7 @@ export function ShareCard({ session }: { session: Session }) {
 
         {/* Footer */}
         <div className="border-t pt-3 text-center" style={{ borderColor: "#1C1C1C" }}>
-          <div className="text-[9px] tracking-wider" style={{ color: "#3A3A3A" }}>
+          <div className="text-[13px] tracking-wider" style={{ color: "#3A3A3A" }}>
             github.com/gordonlu/deeplossless
           </div>
         </div>
