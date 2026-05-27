@@ -1,21 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "motion/react";
 import { StatusBar } from "@/components/status-bar";
 import { SignalTrace } from "@/components/signal-trace";
 import { ClaimEvidence } from "@/components/claim-evidence";
 import { DiffEvidence } from "@/components/diff-evidence";
 import { ShareCard } from "@/components/share-card";
-import { fakeSession, type SessionEvent } from "@/lib/fake-data";
+import { sessions, type SessionEvent } from "@/lib/fake-data";
+import { detectIntegrity } from "@/lib/rule-engine";
 
 type Tab = "trace" | "verification";
 
 export default function Home() {
+  const [activeSessionIdx, setActiveSessionIdx] = useState(0);
   const [selectedEvent, setSelectedEvent] = useState<SessionEvent | null>(null);
   const [activeDiffLine, setActiveDiffLine] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("trace");
   const [loaded, setLoaded] = useState(false);
+
+  const rawSession = sessions[activeSessionIdx];
+  // Run rule engine on the session events
+  const detection = useMemo(() => detectIntegrity(rawSession.events), [rawSession]);
+  // Merge rule engine output with pre-crafted evidence
+  const session = useMemo(() => ({
+    ...rawSession,
+    evidence: [...rawSession.evidence, ...detection.evidence.filter(
+      de => !rawSession.evidence.some(pe => pe.category === de.category)
+    )],
+    integrity_status: detection.status,
+    warning_count: detection.warningCount,
+    critical_count: detection.criticalCount,
+  }), [rawSession, detection]);
 
   // Forensic scan intro (~800ms, skippable)
   if (!loaded) {
@@ -41,7 +57,28 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#0A0A0A" }}>
-      <StatusBar session={fakeSession} />
+      {/* Session selector */}
+      <div className="border-b px-4 py-1.5 flex items-center gap-2 font-mono text-[10px] tracking-wider uppercase" style={{ borderColor: "#1C1C1C", backgroundColor: "#080808" }}>
+        <span className="text-[#7A7A7A]">SESSIONS</span>
+        {sessions.map((s, i) => {
+          const det = detectIntegrity(s.events);
+          const statusColor = det.status === "VERIFIED" ? "#00D1B2" : det.status === "CONFLICTED" ? "#FF5454" : "#FFB020";
+          return (
+            <button
+              key={s.id}
+              onClick={() => { setActiveSessionIdx(i); setSelectedEvent(null); setActiveDiffLine(null); }}
+              className={`px-2 py-0.5 rounded-sm transition-colors ${i === activeSessionIdx ? "" : "text-[#7A7A7A] hover:text-[#EAEAEA]"}`}
+              style={i === activeSessionIdx ? { color: statusColor, backgroundColor: `${statusColor}10`, border: `1px solid ${statusColor}30` } : {}}
+            >
+              {s.label}
+              {det.criticalCount > 0 && <span style={{ color: "#FF5454" }}> ●{det.criticalCount}</span>}
+            </button>
+          );
+        })}
+        <span className="flex-1" />
+        <span className="text-[#FCEE0A] text-[9px]">RULE ENGINE ACTIVE</span>
+      </div>
+      <StatusBar session={session} />
 
       <div className="flex-1 flex flex-col lg:flex-row">
         {/* Left panel */}
@@ -63,17 +100,17 @@ export default function Home() {
           </div>
 
           {activeTab === "trace" ? (
-            <SignalTrace events={fakeSession.events} onSelect={setSelectedEvent} />
+            <SignalTrace events={session.events} onSelect={setSelectedEvent} />
           ) : (
-            <ClaimEvidence evidence={fakeSession.evidence} onSelectDiff={setActiveDiffLine} />
+            <ClaimEvidence evidence={session.evidence} onSelectDiff={setActiveDiffLine} />
           )}
         </div>
 
         {/* Right panel */}
         <div className="flex-1 flex flex-col min-h-0">
-          <DiffEvidence evidence={fakeSession.evidence} activeLine={activeDiffLine} />
+          <DiffEvidence evidence={session.evidence} activeLine={activeDiffLine} />
           <div className="border-t p-4" style={{ borderColor: "#1C1C1C" }}>
-            <ShareCard session={fakeSession} />
+            <ShareCard session={session} />
           </div>
         </div>
       </div>

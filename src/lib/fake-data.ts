@@ -143,3 +143,32 @@ export const fakeSession: Session = {
     },
   ],
 };
+
+// ── Clean session (for contrast) ────────────────────────────────────────
+
+export const cleanSession: Session = {
+  id: "sess_8b2f_20260526",
+  label: "add-rate-limiter",
+  model: "deepseek-v4-pro",
+  started_at: new Date("2026-05-26T14:00:00Z"),
+  tokens: 31200,
+  event_count: 45,
+  warning_count: 0,
+  critical_count: 0,
+  integrity_status: "VERIFIED",
+  events: [
+    { id: 1, timestamp: new Date("2026-05-26T14:00:02Z"), type: "user_prompt", summary: "Add a rate limiter to the API gateway" },
+    { id: 2, timestamp: new Date("2026-05-26T14:00:05Z"), type: "assistant_message", summary: "I'll implement a token bucket rate limiter with configurable capacity and refill rate." },
+    { id: 3, timestamp: new Date("2026-05-26T14:00:10Z"), type: "tool_call", summary: "Read gateway.rs", detail: "exec: cat src/gateway.rs" },
+    { id: 4, timestamp: new Date("2026-05-26T14:00:11Z"), type: "tool_result", summary: "126 lines, middleware chain at line 45" },
+    { id: 5, timestamp: new Date("2026-05-26T14:00:18Z"), type: "patch_applied", summary: "Added RateLimiter struct + token bucket logic" },
+    { id: 6, timestamp: new Date("2026-05-26T14:00:25Z"), type: "tool_call", summary: "cargo build", detail: "exec: cargo build 2>&1" },
+    { id: 7, timestamp: new Date("2026-05-26T14:00:28Z"), type: "tool_result", summary: "Compiled successfully", detail: "Finished dev [unoptimized] target(s) in 2.4s" },
+    { id: 8, timestamp: new Date("2026-05-26T14:00:32Z"), type: "tool_call", summary: "cargo test", detail: "exec: cargo test --lib 2>&1" },
+    { id: 9, timestamp: new Date("2026-05-26T14:00:35Z"), type: "tool_result", summary: "6 passed, 0 failed", detail: "All tests passing including new rate_limiter tests" },
+    { id: 10, timestamp: new Date("2026-05-26T14:00:37Z"), type: "assistant_message", summary: "Rate limiter implemented and verified — all 6 tests pass. Token bucket with 100 req/s default, configurable via --rate-limit flag.", detail: "The implementation adds a RateLimiter middleware that uses a token bucket algorithm. Tests cover: basic throttling, burst allowance, refill behavior, and edge cases (0 capacity, max burst)." },
+  ],
+  evidence: [],
+};
+
+export const sessions: Session[] = [fakeSession, cleanSession];

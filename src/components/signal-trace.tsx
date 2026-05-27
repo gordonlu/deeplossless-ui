@@ -80,13 +80,9 @@ export function SignalTrace({ events, onSelect }: { events: SessionEvent[]; onSe
             <motion.button
               key={event.id}
               onClick={() => { setSelected(event.id); onSelect(event); }}
-              className={`w-full text-left px-3 py-1.5 rounded-sm flex items-center gap-3 font-mono transition-colors ${
-                selected === event.id ? "ring-1 ring-[#FCEE0A]/30" : ""
+              className={`w-full text-left px-3 py-1.5 rounded-sm flex items-center gap-3 font-mono transition-colors hover:bg-[#141414] ${
+                selected === event.id ? "ring-1 ring-[#FCEE0A]/30 bg-[#1A1A1A]" : ""
               }`}
-              style={{
-                backgroundColor: selected === event.id ? "#1A1A1A" : "transparent",
-              }}
-              whileHover={{ backgroundColor: "#141414" }}
             >
               {/* Icon */}
               <span className="text-xs w-4 text-center" style={{ color: severityColor(event.severity) }}>
