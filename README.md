@@ -38,5 +38,4 @@ src/
 
 ## Design
 
-Black background, neon yellow accents, industrial terminal aesthetic.
-Inspired by runtime debuggers, forensic terminals, and signal tracing systems.
+`src/lib/rule-engine.ts` — visit the project to see the visual design in action.
