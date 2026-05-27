@@ -27,7 +27,7 @@ export default function Home() {
   });
   function skipScan() {
     sessionStorage.setItem("dl_scan_seen", "1");
-    skipScan();
+    setLoaded(true);
   }
 
   const rawSession = sessions[activeSessionIdx];
