@@ -18,7 +18,17 @@ export default function Home() {
   const [selectedEvent, setSelectedEvent] = useState<SessionEvent | null>(null);
   const [activeDiffLine, setActiveDiffLine] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("trace");
-  const [loaded, setLoaded] = useState(false);
+  // Only show scan intro on first visit (per browser tab session)
+  const [loaded, setLoaded] = useState(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("dl_scan_seen") === "1";
+    }
+    return false;
+  });
+  function skipScan() {
+    sessionStorage.setItem("dl_scan_seen", "1");
+    skipScan();
+  }
 
   const rawSession = sessions[activeSessionIdx];
   // Run rule engine on the session events
@@ -45,7 +55,7 @@ export default function Home() {
           <ScanLine delay={600} text="MATCHING ASSERTIONS &#x2194; EXECUTION..." color="#FCEE0A" />
           <div className="pt-4">
             <button
-              onClick={() => setLoaded(true)}
+              onClick={() => skipScan()}
               className="text-[#7A7A7A] hover:text-[#EAEAEA] transition-colors tracking-widest"
             >
               [ SKIP ]
@@ -77,10 +87,9 @@ export default function Home() {
           );
         })}
         <span className="flex-1" />
-        <Link href={`/replay/${session.id}`} className="text-[#FCEE0A] hover:underline text-[9px] tracking-wider mr-3">CINEMA</Link>
-        <Link href={`/plan/${session.id}`} className="text-[#FFB020] hover:underline text-[9px] tracking-wider mr-3">DIVERGENCE</Link>
-        <Link href={`/health/${session.id}`} className="text-[#FF5454] hover:underline text-[9px] tracking-wider mr-3">CORRUPTION</Link>
-        <span className="text-[#FCEE0A] text-[9px]">RULE ENGINE ACTIVE</span>
+        <Link href={`/replay/${session.id}`} className="text-[#FCEE0A] hover:underline text-[10px] tracking-[0.15em] font-semibold mr-4">◈ CINEMA</Link>
+        <Link href={`/plan/${session.id}`} className="text-[#FFB020] hover:underline text-[10px] tracking-[0.15em] font-semibold mr-4">↗ DIVERGENCE</Link>
+        <Link href={`/health/${session.id}`} className="text-[#FF5454] hover:underline text-[10px] tracking-[0.15em] font-semibold mr-4">⚠ CORRUPTION</Link>
       </div>
       <StatusBar session={session} />
 
