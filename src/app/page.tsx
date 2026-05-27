@@ -7,6 +7,7 @@ import { SignalTrace } from "@/components/signal-trace";
 import { ClaimEvidence } from "@/components/claim-evidence";
 import { DiffEvidence } from "@/components/diff-evidence";
 import { ShareCard } from "@/components/share-card";
+import Link from "next/link";
 import { sessions, type SessionEvent } from "@/lib/fake-data";
 import { detectIntegrity } from "@/lib/rule-engine";
 
@@ -76,6 +77,9 @@ export default function Home() {
           );
         })}
         <span className="flex-1" />
+        <Link href={`/replay/${session.id}`} className="text-[#FCEE0A] hover:underline text-[9px] tracking-wider mr-3">CINEMA</Link>
+        <Link href={`/plan/${session.id}`} className="text-[#FFB020] hover:underline text-[9px] tracking-wider mr-3">DIVERGENCE</Link>
+        <Link href={`/health/${session.id}`} className="text-[#FF5454] hover:underline text-[9px] tracking-wider mr-3">CORRUPTION</Link>
         <span className="text-[#FCEE0A] text-[9px]">RULE ENGINE ACTIVE</span>
       </div>
       <StatusBar session={session} />
