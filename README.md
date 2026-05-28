@@ -1,8 +1,6 @@
 # deeplossless-ui
 
-**AI Execution Forensics** — a visual debugger for long coding sessions with DeepSeek.
-
-See what the AI actually did. Specifically, see when it said "tested" but never ran a test.
+**AI Execution Forensics** — see what the AI actually did.
 
 ## Quick Start
 
@@ -11,31 +9,33 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000). Requires a running deeplossless instance.
+
+## Features
+
+| Page | Description |
+|------|-------------|
+| `/` | **Signal Trace** — classified event timeline with burst folding. **Findings** sidebar with confidence/source labels. Share card export |
+| `/replay/[id]` | **Execution Cinema** — narrative execution analysis with stats, signal trace, evidence chain |
+| `/plan/[id]` | **Execution Divergence** — plan vs actual comparison |
+| `/health/[id]` | **Execution Corruption** — DAG anomalies as runtime diagnostics |
+| `/stability` | **Cache Stability** — prompt hash heatmap + system prompt diff viewer |
+| `/latency` | **Latency Dashboard** — canvas sparkline, P50/P95/P99 stats, recent records |
 
 ## Stack
 
-- Next.js 16 (Turbopack)
-- Tailwind CSS 4
-- shadcn/ui
-- Motion (Framer)
-- html-to-image
+Next.js 16 · Tailwind CSS 4 · shadcn/ui · Motion · html-to-image
 
 ## Architecture
 
 ```
 src/
-  app/          Layout + main page
-  components/
-    signal-trace    Event timeline with anomaly pulse visualization
-    claim-evidence  Assertion vs Observed Execution confrontation
-    diff-evidence   Code diff with inline warning markers
-    share-card      Forensic report PNG export
-    status-bar      Runtime-style status header
+  app/              Pages (/, /replay, /plan, /health, /stability, /latency)
+  components/       signal-trace, claim-evidence, diff-evidence, share-card, status-bar
   lib/
-    fake-data.ts    Prototype session data
+    api.ts          API client (auto-refresh every 5s)
+    classify.ts     Shared tool → semantic category classification
+    rule-engine.ts  Integrity detection (confidence/source labels)
+    types.ts        Shared TypeScript types
+    use-sessions.ts Session data hook with auto-refresh
 ```
-
-## Design
-
-`src/lib/rule-engine.ts` — visit the project to see the visual design in action.

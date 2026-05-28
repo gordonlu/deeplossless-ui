@@ -124,7 +124,8 @@ export default function Home() {
         <Link href={`/plan/${session.id}`} className="text-[#FFB020] hover:underline text-xs tracking-[0.15em] font-semibold mr-4">↗ DIVERGENCE</Link>
         <Link href={`/health/${session.id}`} className="text-[#FF5454] hover:underline text-xs tracking-[0.15em] font-semibold mr-4">⚠ CORRUPTION</Link>
         <div className="flex-1" />
-        <Link href="/stability" className="px-3 py-1.5 rounded-sm text-[#00D1B2] hover:underline text-xs tracking-[0.15em] font-bold border" style={{ borderColor: "#00D1B230", backgroundColor: "#00D1B208" }}>⚡ CACHE STABILITY</Link>
+        <Link href={`/stability?session=${session.id}`} className="px-3 py-1.5 rounded-sm text-[#00D1B2] hover:underline text-xs tracking-[0.15em] font-bold border" style={{ borderColor: "#00D1B230", backgroundColor: "#00D1B208" }}>⚡ CACHE STABILITY</Link>
+        <Link href={`/latency?session=${session.id}`} className="px-3 py-1.5 rounded-sm text-[#7EB8FF] hover:underline text-xs tracking-[0.15em] font-bold border ml-2" style={{ borderColor: "#7EB8FF30", backgroundColor: "#7EB8FF08" }}>∿ LATENCY</Link>
       </div>
       <StatusBar session={session} />
 
@@ -165,7 +166,7 @@ export default function Home() {
             </div>
             <div className="space-y-2 font-mono text-xs">
               <div><span className="text-[#7A7A7A]">ID: </span><span className="text-[#EAEAEA]">{selectedEvent.id}</span></div>
-              <div><span className="text-[#7A7A7A]">TIME: </span><span className="text-[#EAEAEA]">{selectedEvent.timestamp.toISOString()}</span></div>
+              <div><span className="text-[#7A7A7A]">TIME: </span><span className="text-[#EAEAEA]">{selectedEvent.timestamp.toLocaleString()}</span></div>
               <div><span className="text-[#7A7A7A]">TYPE: </span><span className="text-[#EAEAEA]">{selectedEvent.type}</span></div>
               <div><span className="text-[#7A7A7A]">SUMMARY: </span><span className="text-[#EAEAEA]">{selectedEvent.summary}</span></div>
               {selectedEvent.detail && (

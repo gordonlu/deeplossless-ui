@@ -1,13 +1,49 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { motion } from "motion/react";
 import Link from "next/link";
-import { fetchCacheStability, type StabilityInfo, API_BASE } from "@/lib/api";
+import { useSearchParams } from "next/navigation";
+import { fetchCacheStability, fetchSystemPrompts, type StabilityInfo, type SystemPromptEntry, API_BASE } from "@/lib/api";
 
-export default function StabilityPage() {
+function DiffLine({ oldText, newText }: { oldText: string; newText: string }) {
+  const oldLines = oldText.split("\n");
+  const newLines = newText.split("\n");
+  const maxLen = Math.max(oldLines.length, newLines.length);
+  const rows: { type: "same" | "added" | "removed" | "changed"; old: string; new: string }[] = [];
+
+  for (let i = 0; i < maxLen; i++) {
+    const o = oldLines[i] || "";
+    const n = newLines[i] || "";
+    if (o === n) rows.push({ type: "same", old: o, new: n });
+    else if (!o) rows.push({ type: "added", old: "", new: n });
+    else if (!n) rows.push({ type: "removed", old: o, new: "" });
+    else rows.push({ type: "changed", old: o, new: n });
+  }
+
+  return (
+    <div className="font-mono text-[11px] leading-relaxed max-h-60 overflow-y-auto rounded-sm" style={{ backgroundColor: "#0A0A0A" }}>
+      {rows.map((r, i) => (
+        <div key={i} className="flex" style={{ backgroundColor: r.type === "changed" ? "#FFB02008" : r.type === "added" ? "#00D1B208" : r.type === "removed" ? "#FF545408" : "transparent" }}>
+          <span className="w-6 text-right pr-2 flex-shrink-0 text-[#3A3A3A] select-none">{i + 1}</span>
+          <span className="flex-1 whitespace-pre-wrap" style={{ color: r.type === "same" ? "#7A7A7A" : r.type === "added" ? "#00D1B2" : r.type === "removed" ? "#FF5454" : "#FFB020" }}>
+            {r.type === "changed" ? <>{r.old} → {r.new}</> : r.new || r.old}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StabilityContent() {
+  const searchParams = useSearchParams();
   const [data, setData] = useState<StabilityInfo[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [prompts, setPrompts] = useState<SystemPromptEntry[] | null>(null);
+  const [promptLoading, setPromptLoading] = useState(false);
+  const sessionParam = searchParams.get("session");
+  const [selectedSession, setSelectedSession] = useState<number | null>(sessionParam ? Number(sessionParam) : null);
+  const [diffIdx, setDiffIdx] = useState<number | null>(null);
 
   useEffect(() => {
     fetchCacheStability().then(d => {
@@ -15,6 +51,25 @@ export default function StabilityPage() {
       setLoading(false);
     });
   }, []);
+
+  // Auto-load prompts if session ID provided in URL
+  useEffect(() => {
+    if (sessionParam) {
+      const id = Number(sessionParam);
+      setSelectedSession(id);
+      loadPrompts(id);
+    }
+  }, [sessionParam]);
+
+  function loadPrompts(convId: number) {
+    setSelectedSession(convId);
+    setPromptLoading(true);
+    setDiffIdx(null);
+    fetchSystemPrompts(convId).then(p => {
+      setPrompts(p);
+      setPromptLoading(false);
+    });
+  }
 
   const items = data ?? [];
 
@@ -143,6 +198,81 @@ export default function StabilityPage() {
           );
         })}
 
+        {/* System Prompt Diff */}
+        <div className="p-5 rounded-sm border" style={{ backgroundColor: "#101114", borderColor: "#1C1C1C" }}>
+          <div className="flex items-center justify-between mb-4">
+            <span className="font-mono text-xs tracking-widest uppercase text-[#7EB8FF]">System Prompt History</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                placeholder="Session ID"
+                value={selectedSession || ""}
+                onChange={e => setSelectedSession(e.target.value ? Number(e.target.value) : null)}
+                className="w-20 px-2 py-1 rounded-sm font-mono text-xs bg-transparent border outline-none text-[#EAEAEA]"
+                style={{ borderColor: "#1C1C1C" }}
+                onKeyDown={e => e.key === "Enter" && selectedSession && loadPrompts(selectedSession)}
+              />
+              <button
+                onClick={() => selectedSession && loadPrompts(selectedSession)}
+                disabled={promptLoading || !selectedSession}
+                className="font-mono text-[11px] text-[#7EB8FF] hover:underline tracking-wider disabled:text-[#3A3A3A]"
+              >
+                {promptLoading ? "LOADING..." : "LOAD"}
+              </button>
+            </div>
+          </div>
+          {prompts && prompts.length > 0 ? (
+            <div className="space-y-4">
+              <div className="font-mono text-[11px] text-[#7A7A7A]">
+                {prompts.length} system prompts ({selectedSession ? `session #${selectedSession}` : ""})
+                {prompts.length > 1 && " — click to compare with previous"}
+              </div>
+              {prompts.map((p, i) => {
+                const prev = i > 0 ? prompts[i - 1] : null;
+                const isSelected = diffIdx === i;
+                const hasChanged = prev && prev.content !== p.content;
+                return (
+                  <div key={p.id}>
+                    <button
+                      onClick={() => setDiffIdx(isSelected ? null : i)}
+                      className="w-full text-left px-3 py-2 rounded-sm flex items-center gap-3 font-mono text-xs transition-colors hover:bg-[#141414]"
+                      style={{ backgroundColor: isSelected ? "#1A1A1A" : "transparent" }}
+                    >
+                      <span className="text-[#7A7A7A] w-14 flex-shrink-0">{i + 1}/{prompts.length}</span>
+                      <span className="text-[#3A3A3A] w-16 flex-shrink-0">{p.stored_at?.slice(11, 19) || "-"}</span>
+                      <span className="text-[#EAEAEA] truncate flex-1">{p.content.slice(0, 120)}</span>
+                      <span className="text-[#3A3A3A] w-12 text-right">{p.token_count} tok</span>
+                      {hasChanged && <span className="text-[#FFB020]">Δ</span>}
+                    </button>
+                    {isSelected && (
+                      <div className="mt-2 space-y-2">
+                        {/* Full content */}
+                        <div className="p-3 rounded-sm" style={{ backgroundColor: "#0A0A0A" }}>
+                          <div className="font-mono text-[11px] text-[#7A7A7A] mb-2">Full Content ({p.token_count} tokens)</div>
+                          <div className="font-mono text-[11px] text-[#EAEAEA] whitespace-pre-wrap break-all max-h-60 overflow-y-auto leading-relaxed">
+                            {p.content}
+                          </div>
+                        </div>
+                        {/* Diff with previous */}
+                        {prev && hasChanged && (
+                          <div className="p-3 rounded-sm" style={{ backgroundColor: "#0A0A0A" }}>
+                            <div className="font-mono text-[11px] text-[#FFB020] mb-2">Changes from previous</div>
+                            <DiffLine oldText={prev.content} newText={p.content} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : prompts && prompts.length === 0 ? (
+            <div className="text-xs text-[#3A3A3A] font-mono">No system prompts found for this session.</div>
+          ) : (
+            <div className="text-xs text-[#3A3A3A] font-mono">Click LOAD to fetch system prompt history.</div>
+          )}
+        </div>
+
         {/* Footer */}
         <div className="text-center pt-8 border-t" style={{ borderColor: "#1C1C1C" }}>
           <Link href="/" className="font-mono text-xs text-[#7A7A7A] hover:text-[#FCEE0A] tracking-widest transition-colors">
@@ -151,5 +281,15 @@ export default function StabilityPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function StabilityPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#0A0A0A" }}>
+      <div className="font-mono text-sm text-[#7A7A7A]">Loading...</div>
+    </div>}>
+      <StabilityContent />
+    </Suspense>
   );
 }

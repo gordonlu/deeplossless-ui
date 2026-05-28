@@ -35,6 +35,14 @@ export type ApiStatus = "loading" | "live" | "error";
 export function useSessions(): { sessions: RealSession[]; status: ApiStatus; activeIdx: number; setActiveIdx: (i: number) => void } {
   const [status, setStatus] = useState<ApiStatus>("loading");
   const [activeIdx, setActiveIdx] = useState(0);
+  const [savedSessionId, setSavedSessionId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") return sessionStorage.getItem("dl_active_session_id");
+    return null;
+  });
+  function setAndSaveIdx(i: number) {
+    sessionStorage.setItem("dl_active_session_id", String(sessions[i]?.id || ""));
+    setActiveIdx(i);
+  }
   const [sessions, setSessions] = useState<RealSession[]>([]);
 
   useEffect(() => {
@@ -73,6 +81,11 @@ export function useSessions(): { sessions: RealSession[]; status: ApiStatus; act
       }
       if (!cancelled) {
         setSessions(loaded);
+        // Restore previously selected session by ID
+        if (savedSessionId) {
+          const idx = loaded.findIndex(s => String(s.id) === savedSessionId);
+          if (idx >= 0) setActiveIdx(idx);
+        }
         setStatus("live");
       }
     }
@@ -82,7 +95,7 @@ export function useSessions(): { sessions: RealSession[]; status: ApiStatus; act
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
-  return { sessions, status, activeIdx, setActiveIdx };
+  return { sessions, status, activeIdx, setActiveIdx: setAndSaveIdx };
 }
 
 import { mapEventType, classifyTool } from "./classify";

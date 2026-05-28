@@ -66,3 +66,48 @@ export async function fetchCacheStability(): Promise<StabilityInfo[] | null> {
   const data = await get<{ conversations: StabilityInfo[] }>("/cache/stability");
   return data?.conversations ?? null;
 }
+
+// ── Latency ─────────────────────────────────────────────────────────────
+
+export interface LatencyRecord {
+  timestamp: string;
+  endpoint: string;
+  status_code: number;
+  upstream_status: number | null;
+  latency_ms: number;
+  error: string | null;
+}
+
+export interface LatencySummary {
+  total: number;
+  avg_ms: number;
+  p50_ms: number;
+  p95_ms: number;
+  p99_ms: number;
+  max_ms: number;
+  upstream_errors: number;
+  timeouts_30s_plus: number;
+}
+
+export async function fetchLatencyRecords(limit = 50): Promise<LatencyRecord[] | null> {
+  const data = await get<{ records: LatencyRecord[] }>(`/latency?limit=${limit}`);
+  return data?.records ?? null;
+}
+
+export async function fetchLatencySummary(): Promise<LatencySummary | null> {
+  return await get<LatencySummary>("/latency/summary");
+}
+
+// ── System Prompt ────────────────────────────────────────────────────────
+
+export interface SystemPromptEntry {
+  id: number;
+  content: string;
+  token_count: number;
+  stored_at: string;
+}
+
+export async function fetchSystemPrompts(id: number): Promise<SystemPromptEntry[] | null> {
+  const data = await get<{ prompts: SystemPromptEntry[] }>(`/sessions/${id}/system-prompt`);
+  return data?.prompts ?? null;
+}
