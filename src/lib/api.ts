@@ -158,3 +158,42 @@ export async function fetchSearchEvents(filter: SearchFilter): Promise<SearchEve
   const data = await get<{ events: SearchEvent[] }>(`/search${qs ? "?" + qs : ""}`);
   return data?.events ?? null;
 }
+
+// ── File Diffs ──────────────────────────────────────────────────────
+
+export interface DiffEvent {
+  id: number;
+  session_id: string;
+  tool_call_id: string;
+  file_path: string;
+  start_line: number;
+  end_line: number;
+  change_type: "Insert" | "Delete" | "Replace";
+  before_snippet: string | null;
+  after_snippet: string | null;
+  timestamp: number;
+}
+
+export interface DiffOverlap {
+  first: { tool_call_id: string; file_path: string; lines: string };
+  second: { tool_call_id: string; file_path: string; lines: string };
+}
+
+export async function fetchDiffs(session: string, filePath?: string, limit = 100): Promise<DiffEvent[] | null> {
+  const params = new URLSearchParams({ session, limit: String(limit) });
+  if (filePath) params.set("file_path", filePath);
+  const data = await get<{ diffs: DiffEvent[] }>(`/diffs?${params}`);
+  return data?.diffs ?? null;
+}
+
+export async function fetchReconstruct(session: string, filePath: string, initial?: string): Promise<string | null> {
+  const params = new URLSearchParams({ session, file_path: filePath });
+  if (initial) params.set("initial", initial);
+  const data = await get<{ content: string }>(`/diffs/reconstruct?${params}`);
+  return data?.content ?? null;
+}
+
+export async function fetchDiffOverlaps(session: string): Promise<DiffOverlap[] | null> {
+  const data = await get<{ overlaps: DiffOverlap[] }>(`/diffs/overlaps?session=${session}`);
+  return data?.overlaps ?? null;
+}

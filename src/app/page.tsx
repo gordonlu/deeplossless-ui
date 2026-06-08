@@ -11,7 +11,10 @@ import Link from "next/link";
 import { type SessionEvent, type Evidence } from "@/lib/types";
 import { useSessions } from "@/lib/use-sessions";
 import { getLastError } from "@/lib/api";
+import { fetchDiffOverlaps } from "@/lib/api";
 import { detectIntegrity } from "@/lib/rule-engine";
+import type { DiffOverlap } from "@/lib/api";
+
 export default function Home() {
   const { sessions: apiSessions, status: apiStatus, activeIdx, setActiveIdx } = useSessions();
   const [selectedEvent, setSelectedEvent] = useState<SessionEvent | null>(null);
@@ -132,6 +135,7 @@ export default function Home() {
         <Link href={`/stability?session=${session.id}`} className="px-3 py-1.5 rounded-sm text-[#00D1B2] hover:underline text-xs tracking-[0.15em] font-bold border" style={{ borderColor: "#00D1B230", backgroundColor: "#00D1B208" }}>⚡ CACHE STABILITY</Link>
         <Link href={`/latency?session=${session.id}`} className="px-3 py-1.5 rounded-sm text-[#7EB8FF] hover:underline text-xs tracking-[0.15em] font-bold border ml-2" style={{ borderColor: "#7EB8FF30", backgroundColor: "#7EB8FF08" }}>∿ LATENCY</Link>
         <Link href="/search" className="px-3 py-1.5 rounded-sm text-[#EAEAEA] hover:underline text-xs tracking-[0.15em] font-bold border ml-2" style={{ borderColor: "#1C1C1C", backgroundColor: "#FFFFFF04" }}>⌕ SEARCH</Link>
+        <Link href={`/diffs/${session.id}`} className="px-3 py-1.5 rounded-sm text-[#FFB020] hover:underline text-xs tracking-[0.15em] font-bold border ml-2" style={{ borderColor: "#FFB02030", backgroundColor: "#FFB02008" }}>⇋ DIFFS</Link>
       </div>
       <StatusBar session={session} />
 
@@ -154,6 +158,7 @@ export default function Home() {
             <ShareCard session={session} />
           </div>
           <ClaimEvidence evidence={session.evidence} sessionId={session.id} />
+          <DiffOverlapsPanel sessionId={session.id} />
         </div>
       </div>
 
@@ -213,5 +218,36 @@ function ScanLine({ delay, text, color }: { delay: number; text: string; color: 
     >
       {text}
     </motion.div>
+  );
+}
+
+function DiffOverlapsPanel({ sessionId }: { sessionId: string }) {
+  const [overlaps, setOverlaps] = useState<DiffOverlap[] | null>(null);
+  useEffect(() => {
+    fetchDiffOverlaps(sessionId).then(setOverlaps);
+  }, [sessionId]);
+
+  if (!overlaps || overlaps.length === 0) return null;
+
+  return (
+    <div className="p-3 border-t" style={{ borderColor: "#1C1C1C" }}>
+      <div className="font-mono text-[10px] text-[#FFB020] tracking-wider mb-2">
+        REPEATED EDITS ({overlaps.length})
+      </div>
+      <div className="space-y-1">
+        {overlaps.map((o, i) => (
+          <Link
+            key={i}
+            href={`/diffs/${sessionId}/${encodeURIComponent(o.first.file_path)}`}
+            className="block p-2 rounded-sm font-mono text-[10px] hover:bg-[#FFFFFF04]"
+          >
+            <span className="text-[#EAEAEA]">{o.first.file_path.split("/").pop()} L{o.first.lines}</span>
+            <span className="text-[#7A7A7A] ml-1">
+              {o.first.tool_call_id.slice(0, 8)} &harr; {o.second.tool_call_id.slice(0, 8)}
+            </span>
+          </Link>
+        ))}
+      </div>
+    </div>
   );
 }
