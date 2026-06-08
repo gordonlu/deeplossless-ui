@@ -2,12 +2,21 @@
 
 export const API_BASE = process.env.NEXT_PUBLIC_DEEPLOSSLESS_URL || "http://localhost:8081/v1/lcm";
 
+let lastError: string | null = null;
+export function getLastError(): string | null { return lastError; }
+export function clearError(): void { lastError = null; }
+
 async function get<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${API_BASE}${path}`, { signal: AbortSignal.timeout(3000) });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
+    if (!res.ok) {
+      lastError = `HTTP ${res.status}: ${res.statusText}`;
+      return null;
+    }
+    const data = await res.json();
+    return data;
+  } catch (e) {
+    lastError = e instanceof Error ? e.message : String(e);
     return null;
   }
 }
@@ -110,4 +119,42 @@ export interface SystemPromptEntry {
 export async function fetchSystemPrompts(id: number): Promise<SystemPromptEntry[] | null> {
   const data = await get<{ prompts: SystemPromptEntry[] }>(`/sessions/${id}/system-prompt`);
   return data?.prompts ?? null;
+}
+
+// ── Event Search ──────────────────────────────────────────────────────
+
+export interface SearchEvent {
+  id: number;
+  event_type: string;
+  session_id: string;
+  timestamp: string;
+  tool_name: string | null;
+  path: string | null;
+  status: string | null;
+  content: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface SearchFilter {
+  event_type?: string;
+  tool?: string;
+  session?: string;
+  status?: string;
+  path?: string;
+  content?: string;
+  limit?: number;
+}
+
+export async function fetchSearchEvents(filter: SearchFilter): Promise<SearchEvent[] | null> {
+  const params = new URLSearchParams();
+  if (filter.event_type) params.set("event_type", filter.event_type);
+  if (filter.tool) params.set("tool", filter.tool);
+  if (filter.session) params.set("session", filter.session);
+  if (filter.status) params.set("status", filter.status);
+  if (filter.path) params.set("path", filter.path);
+  if (filter.content) params.set("content", filter.content);
+  if (filter.limit) params.set("limit", String(filter.limit));
+  const qs = params.toString();
+  const data = await get<{ events: SearchEvent[] }>(`/search${qs ? "?" + qs : ""}`);
+  return data?.events ?? null;
 }

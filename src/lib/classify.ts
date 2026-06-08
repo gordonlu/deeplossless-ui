@@ -2,6 +2,7 @@
 // Single source of truth for mapping tool names → semantic categories.
 
 export const TOOL_CATEGORIES: Record<string, { category: string; icon: string; color: string }> = {
+  ugrep: { category: "inspection", icon: "◎", color: "#00D1B2" },
   grep: { category: "inspection", icon: "◎", color: "#00D1B2" },
   rg: { category: "inspection", icon: "◎", color: "#00D1B2" },
   find: { category: "inspection", icon: "◎", color: "#00D1B2" },
@@ -11,6 +12,11 @@ export const TOOL_CATEGORIES: Record<string, { category: string; icon: string; c
   head: { category: "read", icon: "◈", color: "#7EB8FF" },
   tail: { category: "read", icon: "◈", color: "#7EB8FF" },
   read_file: { category: "read", icon: "◈", color: "#7EB8FF" },
+  read: { category: "read", icon: "◈", color: "#7EB8FF" },
+  glob: { category: "inspection", icon: "◎", color: "#00D1B2" },
+  web_search: { category: "inspection", icon: "◎", color: "#00D1B2" },
+  web_fetch: { category: "inspection", icon: "◎", color: "#00D1B2" },
+  task: { category: "exec", icon: "▶", color: "#7EB8FF" },
   cargo_test: { category: "verification", icon: "✓", color: "#00D1B2" },
   "cargo test": { category: "verification", icon: "✓", color: "#00D1B2" },
   pytest: { category: "verification", icon: "✓", color: "#00D1B2" },
@@ -36,7 +42,11 @@ export const TOOL_CATEGORIES: Record<string, { category: string; icon: string; c
 
 export function classifyTool(toolName: string): { category: string; icon: string; color: string } {
   const key = toolName.toLowerCase().replace(/[_-]/g, "");
-  if (TOOL_CATEGORIES[toolName]) return TOOL_CATEGORIES[toolName];
+  // Exact match (case-insensitive)
+  for (const [k, v] of Object.entries(TOOL_CATEGORIES)) {
+    if (k.toLowerCase().replace(/[_-]/g, "") === key) return v;
+  }
+  // Substring match
   for (const [k, v] of Object.entries(TOOL_CATEGORIES)) {
     if (key.includes(k.replace(/[_-]/g, ""))) return v;
   }

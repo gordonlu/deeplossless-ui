@@ -40,18 +40,21 @@ export function useSessions(): { sessions: RealSession[]; status: ApiStatus; act
     return null;
   });
   function setAndSaveIdx(i: number) {
-    sessionStorage.setItem("dl_active_session_id", String(sessions[i]?.id || ""));
+    const id = String(sessions[i]?.id || "");
+    sessionStorage.setItem("dl_active_session_id", id);
+    setSavedSessionId(id);
     setActiveIdx(i);
   }
   const [sessions, setSessions] = useState<RealSession[]>([]);
+  const [initialLoad, setInitialLoad] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
-      setStatus("loading");
+    async function load(isInitial: boolean) {
+      if (isInitial) setStatus("loading");
       const list = await fetchSessions();
       if (!list || list.length === 0) {
-        if (!cancelled) setStatus("error");
+        if (!cancelled && isInitial) setStatus("error");
         return;
       }
       // Load events for the first few sessions
@@ -82,16 +85,20 @@ export function useSessions(): { sessions: RealSession[]; status: ApiStatus; act
       if (!cancelled) {
         setSessions(loaded);
         // Restore previously selected session by ID
-        if (savedSessionId) {
-          const idx = loaded.findIndex(s => String(s.id) === savedSessionId);
+        const currentSavedId = sessionStorage.getItem("dl_active_session_id");
+        if (currentSavedId) {
+          const idx = loaded.findIndex(s => String(s.id) === currentSavedId);
           if (idx >= 0) setActiveIdx(idx);
         }
-        setStatus("live");
+        if (isInitial) {
+          setStatus("live");
+          setInitialLoad(false);
+        }
       }
     }
-    load();
-    // Auto-refresh every 5s
-    const interval = setInterval(load, 5000);
+    load(true);
+    // Auto-refresh every 5s — silent, no status change
+    const interval = setInterval(() => load(false), 5000);
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
 

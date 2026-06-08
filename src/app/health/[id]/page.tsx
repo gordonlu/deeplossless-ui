@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { motion } from "motion/react";
 import Link from "next/link";
+import { API_BASE } from "@/lib/api";
 
 interface HealthData {
   conversation_id: number;
@@ -36,7 +37,7 @@ export default function HealthPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`http://localhost:8081/v1/lcm/health/${id}`).then(r => r.json()).then(d => {
+    fetch(`${API_BASE}/health/${id}`).then(r => r.json()).then(d => {
       setHealth(d);
       setLoading(false);
     }).catch(() => setLoading(false));

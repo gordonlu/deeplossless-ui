@@ -130,14 +130,14 @@ export const rules: Rule[] = [
     },
   },
 
-  // 2. Execution lineage gap — high confidence, observed from DAG health
+  // 2. Execution lineage gap — detect unmatched tool calls
   {
     id: "lineage_gap",
     severity: "warning",
-    description: "DAG health issues detected — execution lineage may be incomplete.",
+    description: "Tool calls without matching results detected — incomplete execution chain.",
     match(_semantic: SemanticEvent[]) {
-      // This is filled by the health API, not events
-      return null; // placeholder — wired from health/[id] data
+      // Evaluated in detectIntegrity using raw events directly
+      return null;
     },
   },
 
@@ -200,6 +200,22 @@ export function detectIntegrity(events: SessionEvent[]): {
   for (const rule of rules) {
     const result = rule.match(semantic);
     if (result) findings.push(result);
+  }
+
+  // Lineage gap: check raw event stream for unmatched tool calls.
+  const tcCount = events.filter(e => e.type === "tool_call").length;
+  const trCount = events.filter(e => e.type === "tool_result").length;
+  if (tcCount > 0 && tcCount > trCount + 3) {
+    findings.push({
+      id: "ev_lineage_gap",
+      severity: "warning",
+      category: "lineage_gap",
+      assertion: `${tcCount - trCount} unmatched tool calls`,
+      observation: `${tcCount} tool call events, ${trCount} tool result events. ${tcCount - trCount} tool call(s) may not have completed.`,
+      evidence_chain: [`${tcCount} tool_call events`, `${trCount} tool_result events`, `${tcCount - trCount} unmatched`],
+      confidence: "medium",
+      source: "inferred",
+    });
   }
 
   const criticals = findings.filter(f => f.severity === "critical").length;

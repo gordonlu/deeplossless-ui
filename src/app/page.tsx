@@ -6,9 +6,11 @@ import { StatusBar } from "@/components/status-bar";
 import { SignalTrace } from "@/components/signal-trace";
 import { ClaimEvidence } from "@/components/claim-evidence";
 import { ShareCard } from "@/components/share-card";
+import { ContextPressure } from "@/components/context-pressure";
 import Link from "next/link";
 import { type SessionEvent, type Evidence } from "@/lib/types";
 import { useSessions } from "@/lib/use-sessions";
+import { getLastError } from "@/lib/api";
 import { detectIntegrity } from "@/lib/rule-engine";
 export default function Home() {
   const { sessions: apiSessions, status: apiStatus, activeIdx, setActiveIdx } = useSessions();
@@ -119,6 +121,9 @@ export default function Home() {
         {apiStatus === "error" && (
           <span className="text-[#FF5454] text-[13px] ml-1">API NOT READY</span>
         )}
+        {apiStatus === "error" && getLastError() && (
+          <span className="text-[#FF5454] text-xs ml-2 opacity-70">{getLastError()}</span>
+        )}
         <span className="flex-1" />
         <Link href={`/replay/${session.id}`} className="text-[#FCEE0A] hover:underline text-xs tracking-[0.15em] font-semibold mr-4">◈ CINEMA</Link>
         <Link href={`/plan/${session.id}`} className="text-[#FFB020] hover:underline text-xs tracking-[0.15em] font-semibold mr-4">↗ DIVERGENCE</Link>
@@ -126,10 +131,18 @@ export default function Home() {
         <div className="flex-1" />
         <Link href={`/stability?session=${session.id}`} className="px-3 py-1.5 rounded-sm text-[#00D1B2] hover:underline text-xs tracking-[0.15em] font-bold border" style={{ borderColor: "#00D1B230", backgroundColor: "#00D1B208" }}>⚡ CACHE STABILITY</Link>
         <Link href={`/latency?session=${session.id}`} className="px-3 py-1.5 rounded-sm text-[#7EB8FF] hover:underline text-xs tracking-[0.15em] font-bold border ml-2" style={{ borderColor: "#7EB8FF30", backgroundColor: "#7EB8FF08" }}>∿ LATENCY</Link>
+        <Link href="/search" className="px-3 py-1.5 rounded-sm text-[#EAEAEA] hover:underline text-xs tracking-[0.15em] font-bold border ml-2" style={{ borderColor: "#1C1C1C", backgroundColor: "#FFFFFF04" }}>⌕ SEARCH</Link>
       </div>
       <StatusBar session={session} />
 
       <div className="flex-1 flex flex-col lg:flex-row">
+        {/* Left: Context Pressure Dashboard */}
+        <div className="w-full lg:w-[360px] flex-shrink-0 border-r overflow-y-auto" style={{ borderColor: "#1C1C1C", maxHeight: "calc(100vh - 120px)" }}>
+          <div className="p-3 border-b" style={{ borderColor: "#1C1C1C" }}>
+            <ContextPressure sessionId={session.id} />
+          </div>
+        </div>
+
         {/* Center: Signal Trace */}
         <div className="flex-1 flex flex-col min-h-0 max-w-4xl mx-auto w-full">
           <SignalTrace events={session.events} totalCount={session.event_count} onSelect={setSelectedEvent} />

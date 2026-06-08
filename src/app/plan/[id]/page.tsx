@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { motion } from "motion/react";
 import Link from "next/link";
+import { API_BASE } from "@/lib/api";
 
 interface PlanData {
   id: number;
   goal: string;
   pending_steps: string[];
+  completed_steps: string[];
   assumptions: string[];
 }
 
@@ -18,16 +20,15 @@ export default function PlanPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`http://localhost:8081/v1/lcm/plan/${id}`).then(r => r.json()).then(d => {
+    fetch(`${API_BASE}/plan/${id}`).then(r => r.json()).then(d => {
       if (d.id) setPlan(d);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [id]);
 
-  const total = plan ? plan.pending_steps.length : 0;
-  const done = 0; // real API doesn't track step completion yet
-  const missed = total - done;
-  const divergencePct = total > 0 ? Math.round((missed / total) * 100) : 0;
+  const done = plan?.completed_steps?.length ?? 0;
+  const total = (plan?.pending_steps?.length ?? 0) + done;
+  const divergencePct = total > 0 ? Math.round(((total - done) / total) * 100) : 0;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A0A0A" }}>
@@ -71,9 +72,16 @@ export default function PlanPage() {
                 <div className="flex-1 border-t" style={{ borderColor: "#FCEE0A20" }} />
               </div>
               <div className="space-y-1">
-                {(plan.pending_steps || []).map((step, i) => (
-                  <motion.div key={i} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} className="flex items-center gap-4 py-3 px-4 rounded-sm font-mono text-sm" style={{ backgroundColor: i % 2 === 0 ? "#0C0C0C" : "transparent" }}>
+                {(plan.completed_steps || []).map((step, i) => (
+                  <motion.div key={`done-${i}`} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} className="flex items-center gap-4 py-3 px-4 rounded-sm font-mono text-sm" style={{ backgroundColor: i % 2 === 0 ? "#0C0C0C" : "transparent" }}>
                     <span className="text-xs text-[#3A3A3A] w-6 text-right">{i + 1}.</span>
+                    <span className="flex-1 text-[#00D1B2]">{step}</span>
+                    <span className="text-[#00D1B2] text-xs">DONE</span>
+                  </motion.div>
+                ))}
+                {(plan.pending_steps || []).map((step, i) => (
+                  <motion.div key={`pending-${i}`} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: (i + done) * 0.1 }} className="flex items-center gap-4 py-3 px-4 rounded-sm font-mono text-sm" style={{ backgroundColor: (i + done) % 2 === 0 ? "#0C0C0C" : "transparent" }}>
+                    <span className="text-xs text-[#3A3A3A] w-6 text-right">{done + i + 1}.</span>
                     <span className="flex-1 text-[#EAEAEA]">{step}</span>
                     <span className="text-[#FFB020] text-xs">PENDING</span>
                   </motion.div>
